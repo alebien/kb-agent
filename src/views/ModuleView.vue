@@ -7,7 +7,7 @@ const title = computed(() => (route.meta.title as string | undefined) ?? '页面
 </script>
 
 <template>
-  <el-card shadow="never" class="module-page">
+  <el-card shadow="never" class="module-page page-surface">
     <template #header>
       <div class="module-header">
         <div>
@@ -42,5 +42,25 @@ const title = computed(() => (route.meta.title as string | undefined) ?? '页面
   margin: 4px 0 0;
   color: var(--el-text-color-secondary);
   font-size: 13px;
+}
+
+@media (max-width: 480px) {
+  .module-header {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .module-header > div {
+    min-width: 0;
+    flex: 1 1 180px;
+  }
+
+  .module-header > .el-button {
+    flex-shrink: 0;
+  }
+
+  .module-header p {
+    font-size: 12px;
+  }
 }
 </style>

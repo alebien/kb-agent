@@ -102,11 +102,18 @@ export async function fetchConversationList(): Promise<ConversationSummary[]> {
 }
 
 export async function fetchConversationDetail(id: string): Promise<ConversationDetail> {
+  const cached = details.get(id)
+  if (cached) {
+    return cached
+  }
+
   return delay(detail(id))
 }
 
-export async function createConversation(): Promise<ConversationSummary> {
+export async function createConversation(initialMessage?: string): Promise<ConversationSummary> {
   const uuid = window.crypto.randomUUID()
+  const prompt = initialMessage?.trim() ?? ''
+  const titleSource = prompt.replace(/\s+/g, ' ')
   const now = new Date()
   const createdAt = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
     now.getDate(),
@@ -115,9 +122,49 @@ export async function createConversation(): Promise<ConversationSummary> {
   ).padStart(2, '0')}`
   const summary: ConversationSummary = {
     id: uuid,
-    title: '新对话',
+    title: titleSource
+      ? titleSource.length > 24
+        ? `${titleSource.slice(0, 24)}…`
+        : titleSource
+      : '新对话',
     updatedAt: createdAt,
   }
+
+  const messages: ConversationDetail['messages'] = prompt
+    ? [
+        {
+          id: `${uuid}-user`,
+          role: 'user',
+          content: prompt,
+        },
+        {
+          id: `${uuid}-agent`,
+          role: 'agent',
+          content:
+            '已收到你的问题，正在结合企业知识库进行检索。当前为演示环境，接入真实服务后将返回实际结果。',
+        },
+      ]
+    : []
+
+  details.set(uuid, {
+    summary,
+    status: 'completed',
+    confidence: null,
+    ticket: null,
+    traceId: 'draft',
+    messages,
+    toolSteps: [],
+    citations: [],
+    stats: {
+      duration: '-',
+      tokens: '-',
+      cost: '-',
+      citations: '0 条',
+    },
+    qualityMetrics: [],
+    traceSteps: [],
+  })
+
   conversations.unshift(summary)
   return delay({ ...summary }, 160)
 }

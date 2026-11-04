@@ -13,25 +13,25 @@ const router = createRouter({
       redirect: `/chat/${defaultConversationId}`,
       children: [
         {
-          path: 'chat',
-          redirect: `/chat/${defaultConversationId}`,
+          path: 'chat/new',
+          name: 'chat-draft',
+          component: () => import('@/views/ChatView.vue'),
+          meta: {
+            title: '新对话',
+            pageTitle: '企业知识库 Agent',
+            status: '运行中',
+            breadcrumb: ['工作台', '客户支持', '对话'],
+          },
         },
         {
           path: 'chat/:conversationId',
           name: 'chat',
           component: () => import('@/views/ChatView.vue'),
-          beforeEnter: (to) => {
-            const conversationId = to.params.conversationId
-            return typeof conversationId === 'string' && conversationIdPattern.test(conversationId)
-              ? true
-              : `/chat/${defaultConversationId}`
-          },
           meta: {
             title: '对话',
             pageTitle: '企业知识库 Agent',
             status: '运行中',
             breadcrumb: ['工作台', '客户支持', '对话'],
-            menu: '/chat',
           },
         },
         {
@@ -42,7 +42,6 @@ const router = createRouter({
             title: '文档',
             pageTitle: '知识文档',
             breadcrumb: ['工作台', '知识库', '文档'],
-            menu: '/documents',
           },
         },
         {
@@ -53,7 +52,6 @@ const router = createRouter({
             title: '评测中心',
             pageTitle: '评测中心',
             breadcrumb: ['工作台', '知识库', '评测中心'],
-            menu: '/evaluation',
           },
         },
         {
@@ -64,7 +62,6 @@ const router = createRouter({
             title: '工单',
             pageTitle: '工单管理',
             breadcrumb: ['工作台', '客户支持', '工单'],
-            menu: '/tickets',
           },
         },
         {
@@ -75,7 +72,6 @@ const router = createRouter({
             title: '设置',
             pageTitle: '系统设置',
             breadcrumb: ['工作台', '系统', '设置'],
-            menu: '/settings',
           },
         },
       ],
@@ -85,6 +81,17 @@ const router = createRouter({
       redirect: `/chat/${defaultConversationId}`,
     },
   ],
+})
+
+router.beforeEach((to) => {
+  if (to.name !== 'chat') {
+    return true
+  }
+
+  const conversationId = to.params.conversationId
+  return typeof conversationId === 'string' && conversationIdPattern.test(conversationId)
+    ? true
+    : `/chat/${defaultConversationId}`
 })
 
 router.afterEach((to) => {
