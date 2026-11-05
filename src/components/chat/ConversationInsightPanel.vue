@@ -2,11 +2,15 @@
 import { computed } from 'vue'
 import type { ConversationDetail } from '@/data/conversations'
 
+/** 观测面板所需的会话详情。 */
 const props = defineProps<{
+  /** 当前会话详情，面板据此展示统计、质量与追踪信息。 */
   detail: ConversationDetail
 }>()
 
+/** 将统计数据转换为带展示文案的列表。 */
 const stats = computed(() => {
+  /** 当前会话的统计值。 */
   const values = props.detail.stats
   return [
     { label: '总耗时', value: values.duration },

@@ -1,16 +1,18 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { defaultConversationId } from '@/data/conversations'
+import { useAuthStore } from '@/stores/auth'
 
+/** 会话 id 的 UUID v4 校验规则，不符合时回退到新对话页。 */
 const conversationIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
+/** 应用路由实例。 */
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
       path: '/',
       component: () => import('@/layout/LayoutIndex.vue'),
-      redirect: `/chat/${defaultConversationId}`,
+      redirect: '/chat/new',
       children: [
         {
           path: 'chat/new',
@@ -20,7 +22,6 @@ const router = createRouter({
             title: '新对话',
             pageTitle: '企业知识库 Agent',
             status: '运行中',
-            breadcrumb: ['工作台', '客户支持', '对话'],
           },
         },
         {
@@ -31,7 +32,6 @@ const router = createRouter({
             title: '对话',
             pageTitle: '企业知识库 Agent',
             status: '运行中',
-            breadcrumb: ['工作台', '客户支持', '对话'],
           },
         },
         {
@@ -41,7 +41,7 @@ const router = createRouter({
           meta: {
             title: '文档',
             pageTitle: '知识文档',
-            breadcrumb: ['工作台', '知识库', '文档'],
+            requiresAuth: true,
           },
         },
         {
@@ -51,7 +51,7 @@ const router = createRouter({
           meta: {
             title: '评测中心',
             pageTitle: '评测中心',
-            breadcrumb: ['工作台', '知识库', '评测中心'],
+            requiresAuth: true,
           },
         },
         {
@@ -61,41 +61,41 @@ const router = createRouter({
           meta: {
             title: '工单',
             pageTitle: '工单管理',
-            breadcrumb: ['工作台', '客户支持', '工单'],
-          },
-        },
-        {
-          path: 'settings',
-          name: 'settings',
-          component: () => import('@/views/ModuleView.vue'),
-          meta: {
-            title: '设置',
-            pageTitle: '系统设置',
-            breadcrumb: ['工作台', '系统', '设置'],
+            requiresAuth: true,
           },
         },
       ],
     },
     {
       path: '/:pathMatch(.*)*',
-      redirect: `/chat/${defaultConversationId}`,
+      redirect: '/chat/new',
     },
   ],
 })
 
 router.beforeEach((to) => {
+  /** 当前登录状态，用于保护需要登录的模块页。 */
+  const authStore = useAuthStore()
+
+  if (to.meta.requiresAuth && !authStore.isLoggedIn) {
+    authStore.openLoginDialog()
+    return { name: 'chat-draft' }
+  }
+
   if (to.name !== 'chat') {
     return true
   }
 
+  /** 当前路由中的会话 id。 */
   const conversationId = to.params.conversationId
   return typeof conversationId === 'string' && conversationIdPattern.test(conversationId)
     ? true
-    : `/chat/${defaultConversationId}`
+    : '/chat/new'
 })
 
 router.afterEach((to) => {
-  const pageTitle = to.meta.pageTitle as string | undefined
+  /** 浏览器标签页标题，优先使用页面标题。 */
+  const pageTitle = (to.meta.pageTitle ?? to.meta.title) as string | undefined
   document.title = pageTitle ? `${pageTitle} · KnoAgent` : 'KnoAgent'
 })
 

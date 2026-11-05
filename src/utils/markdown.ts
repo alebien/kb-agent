@@ -73,6 +73,7 @@ const defaultLinkOpen =
  * 先改写 token 属性，再交回默认规则完成最终渲染。
  */
 markdown.renderer.rules.link_open = (tokens, index, options, env, self) => {
+  /** 当前正在渲染的链接开始 token。 */
   const token = tokens[index]
   if (token) {
     token.attrSet('target', '_blank')
@@ -106,6 +107,7 @@ const PURIFY_CONFIG = {
  * @returns 已清洗的 HTML，可直接配合 `v-html` 使用
  */
 export function renderMarkdown(source: string): string {
+  /** Markdown 解析后的原始 HTML。 */
   const html = markdown.render(source ?? '')
   return DOMPurify.sanitize(html, PURIFY_CONFIG)
 }
@@ -120,6 +122,7 @@ export function renderMarkdown(source: string): string {
  * @returns 已清洗的行内 HTML
  */
 export function renderMarkdownInline(source: string): string {
+  /** 行内 Markdown 解析后的原始 HTML。 */
   const html = markdown.renderInline(source ?? '')
   return DOMPurify.sanitize(html, PURIFY_CONFIG)
 }

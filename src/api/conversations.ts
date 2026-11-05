@@ -5,15 +5,19 @@ import {
   type ConversationSummary,
 } from '@/data/conversations'
 
+/** 会话详情缓存，key 为会话 id，避免重复构造 mock 数据。 */
 const details = new Map<string, ConversationDetail>()
 
+/** 模拟网络延迟，统一返回传入的值。 */
 function delay<T>(value: T, milliseconds = 280): Promise<T> {
   return new Promise((resolve) => {
     window.setTimeout(() => resolve(value), milliseconds)
   })
 }
 
+/** 按会话 id 构造并缓存一份会话详情。 */
 function detail(id: string): ConversationDetail {
+  /** 在预置列表中查找对应的会话摘要。 */
   const summary = conversations.find((conversation) => conversation.id === id)
   if (!summary) {
     throw new Error(`Conversation ${id} not found`)
@@ -23,6 +27,7 @@ function detail(id: string): ConversationDetail {
     return details.get(id)!
   }
 
+  /** 首次访问时创建的会话详情。 */
   const created: ConversationDetail = {
     summary,
     status: 'completed',
@@ -97,11 +102,14 @@ function detail(id: string): ConversationDetail {
   return created
 }
 
+/** 获取会话摘要列表，返回浅拷贝避免调用方直接修改 mock 数据。 */
 export async function fetchConversationList(): Promise<ConversationSummary[]> {
   return delay(conversations.map((conversation) => ({ ...conversation })))
 }
 
+/** 获取会话详情，已缓存时直接返回，否则延迟模拟请求。 */
 export async function fetchConversationDetail(id: string): Promise<ConversationDetail> {
+  /** 命中的缓存详情。 */
   const cached = details.get(id)
   if (cached) {
     return cached
@@ -110,16 +118,23 @@ export async function fetchConversationDetail(id: string): Promise<ConversationD
   return delay(detail(id))
 }
 
+/** 创建新会话，生成 UUID 并写入 mock 数据。 */
 export async function createConversation(initialMessage?: string): Promise<ConversationSummary> {
+  /** 浏览器生成的会话唯一标识。 */
   const uuid = window.crypto.randomUUID()
+  /** 去除首尾空白后的首条提问。 */
   const prompt = initialMessage?.trim() ?? ''
+  /** 用于生成标题的单行文本。 */
   const titleSource = prompt.replace(/\s+/g, ' ')
+  /** 当前时间，用于生成展示用创建时间。 */
   const now = new Date()
+  /** 格式化后的创建时间。 */
   const createdAt = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
     now.getDate(),
   ).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(
     now.getMinutes(),
   ).padStart(2, '0')}`
+  /** 新会话的摘要信息。 */
   const summary: ConversationSummary = {
     id: uuid,
     title: titleSource
@@ -130,6 +145,7 @@ export async function createConversation(initialMessage?: string): Promise<Conve
     updatedAt: createdAt,
   }
 
+  /** 新会话的初始消息，没有提问时为空数组。 */
   const messages: ConversationDetail['messages'] = prompt
     ? [
         {

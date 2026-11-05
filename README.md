@@ -2,6 +2,12 @@
 
 This template should help get you started developing with Vue 3 in Vite.
 
+## 代码规范
+
+- 新增变量必须写中文注释，包括常量、`ref`、`computed`、`props` 字段、接口字段和 store 状态。
+- 类型与函数使用 JSDoc，局部变量可用行内注释；注释说明用途或边界，不复述变量名。
+- 修改旧代码时，顺手补齐所改动变量缺失的注释。
+
 ## Recommended IDE Setup
 
 [VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).

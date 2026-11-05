@@ -3,7 +3,9 @@ import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 import type { Citation, Message } from '@/data/conversations'
 
 defineProps<{
+  /** 当前会话的消息列表。 */
   messages: Message[]
+  /** 助手回答引用的知识来源。 */
   citations: Citation[]
 }>()
 </script>

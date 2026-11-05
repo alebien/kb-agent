@@ -1,31 +1,49 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 import { useConversationStore } from '@/stores/conversations'
 import { debounce } from '@/utils/debounce'
 
+/** 侧边栏的受控状态。 */
 const props = defineProps<{
+  /** 移动端侧边栏抽屉是否打开。 */
   open: boolean
+  /** 桌面端侧边栏是否处于折叠状态。 */
   collapsed: boolean
 }>()
 
+/** 向父组件派发的侧边栏事件。 */
 const emit = defineEmits<{
   close: []
   'toggle-collapse': []
 }>()
 
+/** 当前路由信息。 */
 const route = useRoute()
+/** 路由实例，用于菜单跳转。 */
 const router = useRouter()
+/** 登录状态 store，控制菜单可见性。 */
+const authStore = useAuthStore()
+/** 会话列表 store，提供最近对话数据。 */
 const conversationStore = useConversationStore()
+/** 是否正在播放开关动画，用于临时启用过渡效果。 */
 const isAnimating = ref(false)
+/** 当前视口是否处于移动端断点。 */
 const isMobile = ref(typeof window !== 'undefined' && window.innerWidth <= 900)
+/** 侧边栏开关动画的结束定时器。 */
 let animationTimer: ReturnType<typeof setTimeout> | undefined
+/** 断点切换时置为 true，用于跳过下一次滑出动画。 */
 let skipNextAnimation = false
 
+/** 登录后展示的主菜单配置。 */
 const mainMenus = [
   {
+    /** 菜单文案。 */
     label: '文档',
+    /** 点击后跳转的路由。 */
     path: '/documents',
+    /** 菜单图标的 SVG path。 */
     icon: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6',
   },
   { label: '评测中心', path: '/evaluation', icon: 'M18 20V10M12 20V4M6 20v-6' },
@@ -34,13 +52,11 @@ const mainMenus = [
     path: '/tickets',
     icon: 'M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z',
   },
-  {
-    label: '设置',
-    path: '/settings',
-    icon: 'M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6',
-  },
 ]
 
+/** 当前用户可见的主菜单，未登录时为空。 */
+const visibleMenus = computed(() => (authStore.isLoggedIn ? mainMenus : []))
+/** 当前高亮的菜单项，草稿页高亮「新对话」。 */
 const activeMenu = computed(() => {
   if (route.name === 'chat-draft') {
     return 'new-chat'
@@ -48,16 +64,20 @@ const activeMenu = computed(() => {
 
   return route.path
 })
+/** 「最近对话」菜单项，由会话列表派生。 */
 const recentChats = computed(() =>
   conversationStore.list.map((conversation) => ({
     label: conversation.title,
     path: `/chat/${conversation.id}`,
   })),
 )
+/** 侧边栏折叠按钮的图标路径，根据折叠状态切换方向。 */
 const toggleIcon = computed(() => {
+  /** 是否处于可展开状态。 */
   const canExpand = props.collapsed && !isMobile.value
   return canExpand ? 'M9 18l6-6-6-6' : 'M15 18l-6-6 6-6'
 })
+/** 折叠按钮的无障碍提示文案。 */
 const toggleLabel = computed(() => {
   if (isMobile.value) {
     return '关闭导航'
@@ -97,10 +117,12 @@ function stopAnimation() {
   isAnimating.value = false
 }
 
+/** 请求父组件关闭移动端侧边栏。 */
 function close() {
   emit('close')
 }
 
+/** 移动端点击按钮关闭抽屉，桌面端切换折叠状态。 */
 function toggleAside() {
   if (isMobile.value) {
     close()
@@ -110,6 +132,7 @@ function toggleAside() {
   emit('toggle-collapse')
 }
 
+/** 处理侧边栏菜单选中，关闭抽屉并跳转到对应路由。 */
 async function handleMenuSelect(index: string) {
   close()
 
@@ -121,12 +144,14 @@ async function handleMenuSelect(index: string) {
   await router.push(index)
 }
 
+/** 按下 Esc 时关闭移动端侧边栏。 */
 function handleKeydown(event: KeyboardEvent) {
   if (props.open && event.key === 'Escape') {
     close()
   }
 }
 
+/** 防抖后的窗口尺寸处理：从移动端切回桌面端时收起抽屉。 */
 const handleResize = debounce(() => {
   if (window.innerWidth > 900 && props.open) {
     skipNextAnimation = true
@@ -134,6 +159,7 @@ const handleResize = debounce(() => {
   }
 }, 150)
 
+/** 更新移动端标记并触发防抖的尺寸处理。 */
 function handleViewportChange() {
   isMobile.value = window.innerWidth <= 900
   handleResize()
@@ -191,7 +217,7 @@ onBeforeUnmount(() => {
     <el-scrollbar class="aside-scroll">
       <el-menu :default-active="activeMenu" class="aside-menu" @select="handleMenuSelect">
         <el-menu-item
-          v-for="item in mainMenus"
+          v-for="item in visibleMenus"
           :key="item.path"
           :index="item.path"
           :title="collapsed && !isMobile ? item.label : undefined"

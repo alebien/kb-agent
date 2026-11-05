@@ -4,19 +4,24 @@ import { useRoute } from 'vue-router'
 import HeaderActions from './HeaderActions.vue'
 
 defineProps<{
+  /** 移动端侧边栏是否打开，用于同步按钮的展开状态。 */
   navOpen: boolean
 }>()
 
+/** 向父组件派发的顶部栏事件。 */
 const emit = defineEmits<{
   'open-nav': []
 }>()
 
+/** 当前路由信息，用于读取页面标题与状态。 */
 const route = useRoute()
 
-const breadcrumbs = computed(() => (route.meta.breadcrumb as string[] | undefined) ?? [])
+/** 顶部栏页面标题，取路由 meta 配置。 */
 const pageTitle = computed(() => (route.meta.pageTitle as string | undefined) ?? '企业知识库 Agent')
+/** 标题右侧的状态标签文案。 */
 const status = computed(() => route.meta.status as string | undefined)
 
+/** 请求父组件打开移动端侧边栏。 */
 function openNav() {
   emit('open-nav')
 }
@@ -40,11 +45,6 @@ function openNav() {
       </el-button>
 
       <div class="header-title-area">
-        <el-breadcrumb separator="/">
-          <el-breadcrumb-item v-for="item in breadcrumbs" :key="item">
-            {{ item }}
-          </el-breadcrumb-item>
-        </el-breadcrumb>
         <div class="page-title-row">
           <h1>{{ pageTitle }}</h1>
           <el-tag v-if="status" type="success" effect="plain" round>{{ status }}</el-tag>
@@ -105,7 +105,6 @@ function openNav() {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-top: 6px;
 }
 
 .page-title-row h1 {
@@ -131,14 +130,6 @@ function openNav() {
 }
 
 @media (max-width: 640px) {
-  .header-title-area :deep(.el-breadcrumb) {
-    display: none;
-  }
-
-  .page-title-row {
-    margin-top: 0;
-  }
-
   .page-title-row h1 {
     overflow: hidden;
     font-size: 17px;
@@ -159,14 +150,6 @@ function openNav() {
 }
 
 @media (max-width: 900px) and (max-height: 560px) {
-  .header-title-area :deep(.el-breadcrumb) {
-    display: none;
-  }
-
-  .page-title-row {
-    margin-top: 0;
-  }
-
   .page-title-row h1 {
     font-size: 17px;
   }
