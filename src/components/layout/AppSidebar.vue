@@ -1,9 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { deleteConversation, renameConversation } from '@/api/conversations'
 import { useAuthStore } from '@/stores/auth'
 import { useConversationStore } from '@/stores/conversations'
 import { debounce } from '@/utils/debounce'
+import ConversationList from './ConversationList.vue'
+import { createConversationMenuActions, type ConversationActionKey } from './conversationMenu'
+import type { ConversationSummary } from '@/domain'
 
 /** 侧边栏的受控状态。 */
 const props = defineProps<{
@@ -64,12 +69,14 @@ const activeMenu = computed(() => {
 
   return route.path
 })
-/** 「最近对话」菜单项，由会话列表派生。 */
-const recentChats = computed(() =>
-  conversationStore.list.map((conversation) => ({
-    label: conversation.title,
-    path: `/chat/${conversation.id}`,
-  })),
+/** 当前打开的会话 id，用于最近对话列表高亮。 */
+const activeConversationId = computed(() => {
+  const id = route.params.conversationId
+  return typeof id === 'string' ? id : ''
+})
+/** 最近对话的更多操作，登录后才展示重命名。 */
+const conversationActions = computed(() =>
+  createConversationMenuActions({ canRename: authStore.isLoggedIn }),
 )
 /** 侧边栏折叠按钮的图标路径，根据折叠状态切换方向。 */
 const toggleIcon = computed(() => {
@@ -142,6 +149,99 @@ async function handleMenuSelect(index: string) {
   }
 
   await router.push(index)
+}
+
+/** 打开最近对话并收起移动端侧边栏。 */
+async function selectConversation(conversation: ConversationSummary) {
+  close()
+  await router.push(`/chat/${conversation.id}`)
+}
+
+/** 执行最近对话的操作，新增操作时在这里扩展分支。 */
+async function handleConversationAction(
+  action: ConversationActionKey,
+  conversation: ConversationSummary,
+) {
+  if (action === 'rename') {
+    await renameConversationItem(conversation)
+    return
+  }
+
+  await deleteConversationItem(conversation)
+}
+
+/** 重命名会话，仅登录用户可见并可执行。 */
+async function renameConversationItem(conversation: ConversationSummary) {
+  if (!authStore.isLoggedIn) {
+    return
+  }
+
+  /** ElMessageBox 返回的新名称。 */
+  let nextTitle: string
+
+  try {
+    /** 重命名弹窗的确认结果。 */
+    const result = await ElMessageBox.prompt('请输入新的对话名称', '重命名对话', {
+      confirmButtonText: '保存',
+      cancelButtonText: '取消',
+      inputValue: conversation.title,
+      inputPlaceholder: '对话名称',
+      inputValidator: (value: string) => {
+        /** 去除首尾空白后的名称。 */
+        const title = value.trim()
+        if (!title) {
+          return '名称不能为空'
+        }
+        if (title.length > 40) {
+          return '名称最多 40 个字符'
+        }
+        return true
+      },
+    })
+    nextTitle = result.value.trim()
+  } catch {
+    return
+  }
+
+  try {
+    /** 接口返回的更新后摘要。 */
+    const summary = await renameConversation(conversation.id, nextTitle)
+    conversationStore.updateTitle(summary.id, summary.title)
+    ElMessage.success('已重命名')
+  } catch {
+    ElMessage.error('重命名失败，请稍后重试')
+  }
+}
+
+/** 删除会话，删除当前打开会话后回到新对话页。 */
+async function deleteConversationItem(conversation: ConversationSummary) {
+  try {
+    await ElMessageBox.confirm(
+      `删除「${conversation.title}」后无法恢复，确定继续吗？`,
+      '删除对话',
+      {
+        type: 'warning',
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        confirmButtonClass: 'el-button--danger',
+      },
+    )
+  } catch {
+    return
+  }
+
+  try {
+    await deleteConversation(conversation.id)
+    conversationStore.remove(conversation.id)
+
+    if (activeConversationId.value === conversation.id) {
+      await router.push({ name: 'chat-draft' })
+    }
+
+    ElMessage.success('已删除对话')
+  } catch {
+    ElMessage.error('删除对话失败，请稍后重试')
+  }
 }
 
 /** 按下 Esc 时关闭移动端侧边栏。 */
@@ -238,18 +338,14 @@ onBeforeUnmount(() => {
       <el-divider class="aside-divider" />
       <p class="aside-section-title">最近对话</p>
 
-      <el-menu
-        :default-active="route.path"
-        class="aside-menu recent-menu"
-        @select="handleMenuSelect"
-      >
-        <el-menu-item v-for="chat in recentChats" :key="chat.path" :index="chat.path">
-          <svg class="menu-icon menu-icon--recent" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-          </svg>
-          <span class="menu-label">{{ chat.label }}</span>
-        </el-menu-item>
-      </el-menu>
+      <ConversationList
+        class="recent-conversations"
+        :items="conversationStore.list"
+        :active-id="activeConversationId"
+        :actions="conversationActions"
+        @select="selectConversation"
+        @action="handleConversationAction"
+      />
     </el-scrollbar>
   </el-aside>
 </template>
@@ -369,12 +465,6 @@ onBeforeUnmount(() => {
   stroke-width: 1.7;
 }
 
-.menu-icon--recent {
-  width: 16px;
-  height: 16px;
-  opacity: 0.7;
-}
-
 .menu-label {
   overflow: hidden;
   flex: 1;
@@ -397,11 +487,6 @@ onBeforeUnmount(() => {
 
 .aside-scroll :deep(.el-scrollbar__wrap) {
   overscroll-behavior: contain;
-}
-
-.recent-menu :deep(.el-menu-item) {
-  height: 38px;
-  font-size: 13px;
 }
 
 .aside-overlay {
@@ -442,7 +527,7 @@ onBeforeUnmount(() => {
   .app-aside.is-collapsed .menu-label,
   .app-aside.is-collapsed .aside-divider,
   .app-aside.is-collapsed .aside-section-title,
-  .app-aside.is-collapsed .recent-menu {
+  .app-aside.is-collapsed .recent-conversations {
     display: none;
   }
 

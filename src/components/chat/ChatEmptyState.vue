@@ -18,9 +18,6 @@ withDefaults(
     <div class="chat-empty__mark">K</div>
     <h1>{{ title }}</h1>
     <p v-if="description">{{ description }}</p>
-    <div class="chat-empty__composer">
-      <slot name="composer" />
-    </div>
   </div>
 </template>
 
@@ -60,11 +57,6 @@ withDefaults(
   font-size: 14px;
 }
 
-.chat-empty__composer {
-  width: 100%;
-  margin-top: 32px;
-}
-
 @media (max-width: 640px) {
   .chat-empty {
     padding: 16px 0;
@@ -84,10 +76,6 @@ withDefaults(
 
   .chat-empty p {
     font-size: 13px;
-  }
-
-  .chat-empty__composer {
-    margin-top: 22px;
   }
 }
 
@@ -110,10 +98,6 @@ withDefaults(
 
   .chat-empty p {
     font-size: 13px;
-  }
-
-  .chat-empty__composer {
-    margin-top: 18px;
   }
 }
 </style>

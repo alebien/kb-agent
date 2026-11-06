@@ -7,7 +7,7 @@ import ChatComposer from '@/components/chat/ChatComposer.vue'
 import ChatEmptyState from '@/components/chat/ChatEmptyState.vue'
 import ChatMessageList from '@/components/chat/ChatMessageList.vue'
 // import ConversationInsightPanel from '@/components/chat/ConversationInsightPanel.vue'
-import type { ConversationDetail } from '@/data/conversations'
+import type { Conversation } from '@/domain'
 import { useConversationStore } from '@/stores/conversations'
 
 /** 当前路由信息，用于区分草稿页与会话页。 */
@@ -22,7 +22,7 @@ const isLoading = ref(true)
 /** 会话加载失败时的提示文案，空字符串表示无错误。 */
 const loadError = ref('')
 /** 当前展示的会话详情。 */
-const currentDetail = ref<ConversationDetail | null>(null)
+const currentDetail = ref<Conversation | null>(null)
 /** 已加载的会话 id，用于避免重复请求同一会话。 */
 const activeConversationId = ref('')
 /** 输入框草稿内容。 */
@@ -38,6 +38,10 @@ const isDraft = computed(() => route.name === 'chat-draft')
 const conversationId = computed(() => route.params.conversationId as string | undefined)
 /** 当前会话是否已有消息。 */
 const hasMessages = computed(() => (currentDetail.value?.messages.length ?? 0) > 0)
+/** 输入框是否位于页面中部：草稿页和没有消息的会话使用居中布局。 */
+const isComposerCentered = computed(
+  () => isDraft.value || (currentDetail.value !== null && !hasMessages.value),
+)
 
 /** 按 id 加载会话详情，并通过请求序号避免竞态覆盖。 */
 async function loadConversation(id: string) {
@@ -126,48 +130,40 @@ watch(
 
 <template>
   <div class="chat-layout page-container" :class="{ 'has-insight': hasMessages }">
-    <section
-      v-loading="isLoading"
-      class="chat-main page-surface"
-      element-loading-text="加载会话中..."
-      element-loading-background="var(--el-bg-color)"
-    >
-      <template v-if="isDraft">
-        <div class="chat-empty-wrap">
-          <ChatEmptyState>
-            <template #composer>
-              <ChatComposer v-model="draft" :loading="isCreating" @submit="handleDraftSubmit" />
-            </template>
-          </ChatEmptyState>
-        </div>
-      </template>
+    <section class="chat-main page-surface">
+      <div class="chat-stage" :class="{ 'is-composer-centered': isComposerCentered }">
+        <div
+          v-loading="isLoading"
+          class="chat-stage__top"
+          element-loading-text="加载会话中..."
+          element-loading-background="var(--el-bg-color)"
+        >
+          <el-result
+            v-if="loadError"
+            icon="warning"
+            :title="loadError"
+            sub-title="请从左侧选择有效会话"
+          />
 
-      <el-result
-        v-else-if="loadError"
-        icon="warning"
-        :title="loadError"
-        sub-title="请从左侧选择有效会话"
-      />
-
-      <template v-else-if="currentDetail">
-        <div v-if="!hasMessages" class="chat-empty-wrap">
-          <ChatEmptyState>
-            <template #composer>
-              <ChatComposer v-model="draft" />
-            </template>
-          </ChatEmptyState>
-        </div>
-
-        <template v-else>
           <ChatMessageList
+            v-else-if="currentDetail && hasMessages"
             :messages="currentDetail.messages"
             :citations="currentDetail.citations"
           />
-          <div class="chat-composer-bar">
-            <ChatComposer v-model="draft" />
-          </div>
-        </template>
-      </template>
+
+          <ChatEmptyState v-else-if="isDraft || currentDetail" />
+        </div>
+
+        <div v-if="!loadError" class="chat-stage__composer">
+          <ChatComposer
+            v-model="draft"
+            :loading="isCreating || isLoading"
+            @submit="handleDraftSubmit"
+          />
+        </div>
+
+        <div class="chat-stage__bottom" aria-hidden="true"></div>
+      </div>
     </section>
 
     <!-- 观测信息用 -->
@@ -188,51 +184,70 @@ watch(
 } */
 
 .chat-main {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.chat-stage {
   display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.chat-stage__top {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
 }
 
-.chat-main :deep(.el-loading-mask) {
+.chat-stage.is-composer-centered .chat-stage__top {
+  justify-content: flex-end;
+}
+
+.chat-stage.is-composer-centered .chat-stage__top :deep(.chat-empty) {
+  margin: 0 auto;
+  padding-inline: var(--app-chat-inline-padding);
+}
+
+.chat-stage__top :deep(.el-loading-mask) {
   border-radius: inherit;
 }
 
-.chat-empty-wrap {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  justify-content: center;
-  min-height: 0;
-  padding: 24px var(--app-chat-inline-padding);
-  overflow: auto;
-}
-
-.chat-composer-bar {
+.chat-stage__composer {
   width: min(100%, calc(var(--app-chat-max-width) + var(--app-chat-inline-padding) * 2));
   margin: 0 auto;
-  flex-shrink: 0;
+  flex: none;
   padding: 8px var(--app-chat-inline-padding) 20px;
 }
 
-@media (max-width: 900px) {
-  .chat-empty-wrap {
-    padding: 20px var(--app-chat-inline-padding);
-  }
+.chat-stage__bottom {
+  flex: 0 1 0;
+  min-height: 0;
+  transition: flex-grow 0.48s cubic-bezier(0.22, 1, 0.36, 1);
+}
 
-  .chat-composer-bar {
+.chat-stage.is-composer-centered .chat-stage__bottom {
+  flex-grow: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-stage__bottom {
+    transition: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .chat-stage__composer {
     padding: 8px var(--app-chat-inline-padding) 14px;
   }
 }
 
 @media (max-width: 640px) {
-  .chat-empty-wrap {
-    align-items: flex-start;
-    justify-content: flex-start;
-    padding: 16px var(--app-chat-inline-padding);
-  }
-
-  .chat-composer-bar {
+  .chat-stage__composer {
     padding: 8px var(--app-chat-inline-padding) calc(12px + env(safe-area-inset-bottom));
   }
 }

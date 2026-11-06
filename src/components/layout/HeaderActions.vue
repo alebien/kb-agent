@@ -1,9 +1,15 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 
 /** 登录状态 store，控制头像展示与登录弹窗。 */
 const authStore = useAuthStore()
+/** 当前路由信息，用于退出登录后的页面回流。 */
+const route = useRoute()
+/** 路由实例，退出登录时离开受保护页面。 */
+const router = useRouter()
 
 /** 头像提示文案：已登录显示用户名，未登录显示「未登录」。 */
 const displayName = computed(
@@ -20,19 +26,50 @@ function openLogin() {
     authStore.openLoginDialog()
   }
 }
+
+/** 处理账号菜单，目前仅支持退出登录。 */
+async function handleAccountCommand(command: string) {
+  if (command !== 'logout') {
+    return
+  }
+
+  authStore.logout()
+  ElMessage.success('已退出登录')
+
+  if (route.meta.requiresAuth) {
+    await router.push({ name: 'chat-draft' })
+  }
+}
 </script>
 
 <template>
   <div class="header-actions">
-    <el-tooltip :content="displayName" placement="bottom" :show-after="300">
+    <el-dropdown
+      v-if="authStore.isLoggedIn"
+      trigger="click"
+      placement="bottom-end"
+      @command="handleAccountCommand"
+    >
+      <button type="button" class="account-button" :aria-label="displayName">
+        <el-avatar :size="40" class="user-avatar">{{ avatarText }}</el-avatar>
+      </button>
+
+      <template #dropdown>
+        <el-dropdown-menu>
+          <el-dropdown-item disabled>{{ displayName }}</el-dropdown-item>
+          <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
+        </el-dropdown-menu>
+      </template>
+    </el-dropdown>
+
+    <el-tooltip v-else content="未登录" placement="bottom" :show-after="300">
       <button
         type="button"
-        class="account-button"
-        :class="{ 'is-guest': !authStore.isLoggedIn }"
-        :aria-label="displayName"
+        class="account-button is-guest"
+        aria-label="未登录，点击登录"
         @click="openLogin"
       >
-        <el-avatar :size="40" class="user-avatar" :class="{ 'is-guest': !authStore.isLoggedIn }">
+        <el-avatar :size="40" class="user-avatar is-guest">
           {{ avatarText }}
         </el-avatar>
       </button>

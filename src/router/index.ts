@@ -37,7 +37,7 @@ const router = createRouter({
         {
           path: 'documents',
           name: 'documents',
-          component: () => import('@/views/ModuleView.vue'),
+          component: () => import('@/views/DocumentsView.vue'),
           meta: {
             title: '文档',
             pageTitle: '知识文档',
@@ -47,7 +47,7 @@ const router = createRouter({
         {
           path: 'evaluation',
           name: 'evaluation',
-          component: () => import('@/views/ModuleView.vue'),
+          component: () => import('@/views/EvaluationView.vue'),
           meta: {
             title: '评测中心',
             pageTitle: '评测中心',
@@ -57,7 +57,7 @@ const router = createRouter({
         {
           path: 'tickets',
           name: 'tickets',
-          component: () => import('@/views/ModuleView.vue'),
+          component: () => import('@/views/TicketsView.vue'),
           meta: {
             title: '工单',
             pageTitle: '工单管理',
@@ -78,7 +78,7 @@ router.beforeEach((to) => {
   const authStore = useAuthStore()
 
   if (to.meta.requiresAuth && !authStore.isLoggedIn) {
-    authStore.openLoginDialog()
+    authStore.openLoginDialog(to.fullPath)
     return { name: 'chat-draft' }
   }
 

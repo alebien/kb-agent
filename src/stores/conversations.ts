@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { fetchConversationList } from '@/api/conversations'
-import type { ConversationSummary } from '@/data/conversations'
+import type { ConversationSummary } from '@/domain'
 
 export const useConversationStore = defineStore('conversations', () => {
   /** 左侧「最近对话」使用的会话摘要列表。 */
@@ -36,5 +36,19 @@ export const useConversationStore = defineStore('conversations', () => {
     list.value = [summary, ...list.value.filter((item) => item.id !== summary.id)]
   }
 
-  return { list, isLoading, load, add }
+  /** 从最近对话列表中移除指定会话。 */
+  function remove(id: string) {
+    list.value = list.value.filter((conversation) => conversation.id !== id)
+  }
+
+  /** 更新指定会话在列表中的标题。 */
+  function updateTitle(id: string, title: string) {
+    /** 需要更新的会话项。 */
+    const summary = list.value.find((conversation) => conversation.id === id)
+    if (summary) {
+      summary.title = title
+    }
+  }
+
+  return { list, isLoading, load, add, remove, updateTitle }
 })

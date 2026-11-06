@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { ConversationDetail } from '@/data/conversations'
+import type { Conversation } from '@/domain'
 
 /** 观测面板所需的会话详情。 */
 const props = defineProps<{
   /** 当前会话详情，面板据此展示统计、质量与追踪信息。 */
-  detail: ConversationDetail
+  detail: Conversation
 }>()
 
 /** 将统计数据转换为带展示文案的列表。 */

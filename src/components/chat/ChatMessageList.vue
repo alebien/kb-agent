@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
-import type { Citation, Message } from '@/data/conversations'
+import type { Citation, Message } from '@/domain'
 
 defineProps<{
   /** 当前会话的消息列表。 */
