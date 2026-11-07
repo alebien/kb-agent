@@ -136,8 +136,29 @@
   content: '';
 }
 
+/* 流式新增的字符单独淡入，缓解整块替换造成的跳字感 */
+.markdown-body.is-streaming .markdown-stream-chunk {
+  animation: markdown-chunk-in 70ms ease-out both;
+}
+
+@keyframes markdown-chunk-in {
+  from {
+    opacity: 0.2;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
 @keyframes markdown-cursor {
   50% {
     opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .markdown-body.is-streaming .markdown-stream-chunk {
+    animation: none;
   }
 }

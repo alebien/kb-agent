@@ -14,6 +14,11 @@
   opacity: 1;
 }
 
+/* 助手回答的操作常驻，方便直接复制或重试 */
+.message-row.is-agent .message-actions {
+  opacity: 1;
+}
+
 .message-action {
   display: inline-flex;
   width: 26px;
