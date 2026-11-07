@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
+import { PERMISSIONS } from '@/auth'
+import { checkRoutePermission } from '@/auth/guard'
 
 /** 会话 id 的 UUID v4 校验规则，不符合时回退到新对话页 */
 const conversationIdPattern =
@@ -41,7 +42,7 @@ const router = createRouter({
           meta: {
             title: '文档',
             pageTitle: '知识文档',
-            requiresAuth: true,
+            permission: PERMISSIONS.DOCUMENT_VIEW,
           },
         },
         {
@@ -51,7 +52,7 @@ const router = createRouter({
           meta: {
             title: '评测中心',
             pageTitle: '评测中心',
-            requiresAuth: true,
+            permission: PERMISSIONS.EVALUATION_VIEW,
           },
         },
         {
@@ -61,7 +62,25 @@ const router = createRouter({
           meta: {
             title: '工单',
             pageTitle: '工单管理',
-            requiresAuth: true,
+            permission: PERMISSIONS.TICKET_VIEW,
+          },
+        },
+        {
+          path: 'dev/markdown',
+          name: 'markdown-preview',
+          component: () => import('@/views/MarkdownPreviewView.vue'),
+          meta: {
+            title: 'Markdown 联调',
+            pageTitle: 'Markdown 联调',
+          },
+        },
+        {
+          path: 'forbidden',
+          name: 'forbidden',
+          component: () => import('@/views/ForbiddenView.vue'),
+          meta: {
+            title: '无权访问',
+            pageTitle: '无权访问',
           },
         },
       ],
@@ -74,12 +93,13 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
-  /** 当前登录状态，用于保护需要登录的模块页 */
-  const authStore = useAuthStore()
+  /** 当前路由要求的权限，未配置表示访客可访问 */
+  const permission = to.meta.permission
 
-  if (to.meta.requiresAuth && !authStore.isLoggedIn) {
-    authStore.openLoginDialog(to.fullPath)
-    return { name: 'chat-draft' }
+  /** 权限校验结果，true 表示放行 */
+  const permissionResult = checkRoutePermission(permission, to.fullPath)
+  if (permissionResult !== true) {
+    return permissionResult
   }
 
   if (to.name !== 'chat') {
