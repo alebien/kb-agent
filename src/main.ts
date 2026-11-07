@@ -9,7 +9,7 @@ import './assets/layout.css'
 import App from './App.vue'
 import router from './router'
 
-/** Vue 应用实例。 */
+/** Vue 应用实例 */
 const app = createApp(App)
 
 app.use(createPinia())

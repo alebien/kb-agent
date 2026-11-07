@@ -3,7 +3,7 @@ import { onMounted } from 'vue'
 import TicketList from '@/components/tickets/TicketList.vue'
 import { useTicketStore } from '@/stores/tickets'
 
-/** 工单 store，提供工单列表。 */
+/** 工单 store，提供工单列表 */
 const ticketStore = useTicketStore()
 
 onMounted(() => {

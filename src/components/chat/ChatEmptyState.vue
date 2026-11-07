@@ -1,9 +1,9 @@
 <script setup lang="ts">
 withDefaults(
   defineProps<{
-    /** 空状态主标题。 */
+    /** 空状态主标题 */
     title?: string
-    /** 空状态辅助说明，为空时不展示。 */
+    /** 空状态辅助说明，为空时不展示 */
     description?: string
   }>(),
   {

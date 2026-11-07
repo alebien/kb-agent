@@ -7,45 +7,45 @@ import type {
   ConversationMenuAction,
 } from './conversationMenu'
 
-/** 单个最近对话项。 */
+/** 单个最近对话项 */
 const props = defineProps<{
-  /** 会话摘要数据。 */
+  /** 会话摘要数据 */
   conversation: ConversationSummary
-  /** 是否为当前打开会话。 */
+  /** 是否为当前打开会话 */
   active: boolean
-  /** 当前可用的操作菜单。 */
+  /** 当前可用的操作菜单 */
   actions: ConversationMenuAction[]
 }>()
 
-/** 向列表和侧边栏派发的交互事件。 */
+/** 向列表和侧边栏派发的交互事件 */
 const emit = defineEmits<{
-  /** 点击会话，请求打开。 */
+  /** 点击会话，请求打开 */
   select: [conversation: ConversationSummary]
-  /** 选择某个会话操作。 */
+  /** 选择某个会话操作 */
   action: [action: ConversationActionKey, conversation: ConversationSummary]
 }>()
 
-/** 根据可见性过滤后的操作项。 */
+/** 根据可见性过滤后的操作项 */
 const visibleActions = computed(() => props.actions.filter((action) => action.visible))
 
-/** 操作图标路径映射。 */
+/** 操作图标路径映射 */
 const actionIconPaths: Record<ConversationActionIcon, string> = {
   edit: 'M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z',
   trash: 'M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5',
 }
 
-/** 打开当前会话。 */
+/** 打开当前会话 */
 function selectConversation() {
   emit('select', props.conversation)
 }
 
-/** 将 Element Plus 的下拉命令转换为业务操作。 */
+/** 将 Element Plus 的下拉命令转换为业务操作 */
 function handleCommand(command: string | number | object) {
   if (typeof command !== 'string') {
     return
   }
 
-  /** 匹配到的操作配置。 */
+  /** 匹配到的操作配置 */
   const action = visibleActions.value.find((item) => item.key === command)
   if (action) {
     emit('action', action.key, props.conversation)

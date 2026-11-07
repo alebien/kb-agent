@@ -1,6 +1,6 @@
 import type { ConversationSummary } from '@/domain'
 
-/** 预置的会话摘要 mock 数据。 */
+/** 预置的会话摘要 mock 数据 */
 export const conversations: ConversationSummary[] = [
   {
     id: '9f2c4e1a-7b3d-4c8f-a1e6-2d5b8c0f4a71',
@@ -29,5 +29,5 @@ export const conversations: ConversationSummary[] = [
   },
 ]
 
-/** 默认会话 id，供演示或兜底跳转使用。 */
+/** 默认会话 id，供演示或兜底跳转使用 */
 export const defaultConversationId = conversations[0]!.id

@@ -3,7 +3,7 @@ import { onMounted } from 'vue'
 import EvalCaseList from '@/components/evaluation/EvalCaseList.vue'
 import { useEvalCaseStore } from '@/stores/eval-cases'
 
-/** 评测 store，提供评测用例列表。 */
+/** 评测 store，提供评测用例列表 */
 const evalCaseStore = useEvalCaseStore()
 
 onMounted(() => {

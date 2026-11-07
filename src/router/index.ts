@@ -1,11 +1,11 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
-/** 会话 id 的 UUID v4 校验规则，不符合时回退到新对话页。 */
+/** 会话 id 的 UUID v4 校验规则，不符合时回退到新对话页 */
 const conversationIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
-/** 应用路由实例。 */
+/** 应用路由实例 */
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -74,7 +74,7 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
-  /** 当前登录状态，用于保护需要登录的模块页。 */
+  /** 当前登录状态，用于保护需要登录的模块页 */
   const authStore = useAuthStore()
 
   if (to.meta.requiresAuth && !authStore.isLoggedIn) {
@@ -86,7 +86,7 @@ router.beforeEach((to) => {
     return true
   }
 
-  /** 当前路由中的会话 id。 */
+  /** 当前路由中的会话 id */
   const conversationId = to.params.conversationId
   return typeof conversationId === 'string' && conversationIdPattern.test(conversationId)
     ? true
@@ -94,7 +94,7 @@ router.beforeEach((to) => {
 })
 
 router.afterEach((to) => {
-  /** 浏览器标签页标题，优先使用页面标题。 */
+  /** 浏览器标签页标题，优先使用页面标题 */
   const pageTitle = (to.meta.pageTitle ?? to.meta.title) as string | undefined
   document.title = pageTitle ? `${pageTitle} · KnoAgent` : 'KnoAgent'
 })

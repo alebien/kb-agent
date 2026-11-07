@@ -10,54 +10,54 @@ import ChatMessageList from '@/components/chat/ChatMessageList.vue'
 import type { Conversation } from '@/domain'
 import { useConversationStore } from '@/stores/conversations'
 
-/** 当前路由信息，用于区分草稿页与会话页。 */
+/** 当前路由信息，用于区分草稿页与会话页 */
 const route = useRoute()
-/** 路由实例，用于创建会话后的地址替换。 */
+/** 路由实例，用于创建会话后的地址替换 */
 const router = useRouter()
-/** 会话列表 store，新建会话后同步侧边栏。 */
+/** 会话列表 store，新建会话后同步侧边栏 */
 const conversationStore = useConversationStore()
 
-/** 会话详情是否正在加载。 */
+/** 会话详情是否正在加载 */
 const isLoading = ref(true)
-/** 会话加载失败时的提示文案，空字符串表示无错误。 */
+/** 会话加载失败时的提示文案，空字符串表示无错误 */
 const loadError = ref('')
-/** 当前展示的会话详情。 */
+/** 当前展示的会话详情 */
 const currentDetail = ref<Conversation | null>(null)
-/** 已加载的会话 id，用于避免重复请求同一会话。 */
+/** 已加载的会话 id，用于避免重复请求同一会话 */
 const activeConversationId = ref('')
-/** 输入框草稿内容。 */
+/** 输入框草稿内容 */
 const draft = ref('')
-/** 是否正在创建新会话，防止重复提交。 */
+/** 是否正在创建新会话，防止重复提交 */
 const isCreating = ref(false)
-/** 加载请求序号，用于丢弃过期请求的结果。 */
+/** 加载请求序号，用于丢弃过期请求的结果 */
 let loadRequestId = 0
 
-/** 当前是否处于「新对话」草稿页。 */
+/** 当前是否处于「新对话」草稿页 */
 const isDraft = computed(() => route.name === 'chat-draft')
-/** 当前路由中的会话 id。 */
+/** 当前路由中的会话 id */
 const conversationId = computed(() => route.params.conversationId as string | undefined)
-/** 当前会话是否已有消息。 */
+/** 当前会话是否已有消息 */
 const hasMessages = computed(() => (currentDetail.value?.messages.length ?? 0) > 0)
-/** 输入框是否位于页面中部：草稿页和没有消息的会话使用居中布局。 */
+/** 输入框是否位于页面中部：草稿页和没有消息的会话使用居中布局 */
 const isComposerCentered = computed(
   () => isDraft.value || (currentDetail.value !== null && !hasMessages.value),
 )
 
-/** 按 id 加载会话详情，并通过请求序号避免竞态覆盖。 */
+/** 按 id 加载会话详情，并通过请求序号避免竞态覆盖 */
 async function loadConversation(id: string) {
   if (!id || activeConversationId.value === id) {
     return
   }
 
   activeConversationId.value = id
-  /** 本次加载请求的序号。 */
+  /** 本次加载请求的序号 */
   const requestId = ++loadRequestId
   currentDetail.value = null
   isLoading.value = true
   loadError.value = ''
 
   try {
-    /** 接口返回的会话详情。 */
+    /** 接口返回的会话详情 */
     const detail = await fetchConversationDetail(id)
 
     if (requestId !== loadRequestId) {
@@ -79,13 +79,13 @@ async function loadConversation(id: string) {
   }
 }
 
-/** 提交草稿页的首条提问：创建会话并跳转到真实会话路由。 */
+/** 提交草稿页的首条提问：创建会话并跳转到真实会话路由 */
 async function handleDraftSubmit(content: string) {
   if (!isDraft.value || isCreating.value) {
     return
   }
 
-  /** 去除首尾空白后的提问内容。 */
+  /** 去除首尾空白后的提问内容 */
   const message = content.trim()
   if (!message) {
     return
@@ -94,7 +94,7 @@ async function handleDraftSubmit(content: string) {
   isCreating.value = true
 
   try {
-    /** 新建的会话摘要。 */
+    /** 新建的会话摘要 */
     const conversation = await createConversation(message)
     conversationStore.add(conversation)
     draft.value = ''

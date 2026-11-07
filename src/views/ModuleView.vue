@@ -2,9 +2,9 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 
-/** 当前路由信息，用于读取模块标题。 */
+/** 当前路由信息，用于读取模块标题 */
 const route = useRoute()
-/** 模块页标题，取路由 meta 中的 title。 */
+/** 模块页标题，取路由 meta 中的 title */
 const title = computed(() => (route.meta.title as string | undefined) ?? '页面')
 </script>
 

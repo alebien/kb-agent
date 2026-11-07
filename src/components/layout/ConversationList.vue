@@ -3,21 +3,21 @@ import type { ConversationSummary } from '@/domain'
 import ConversationListItem from './ConversationListItem.vue'
 import type { ConversationActionKey, ConversationMenuAction } from './conversationMenu'
 
-/** 最近对话列表参数。 */
+/** 最近对话列表参数 */
 defineProps<{
-  /** 会话摘要列表。 */
+  /** 会话摘要列表 */
   items: ConversationSummary[]
-  /** 当前打开会话 id，用于高亮。 */
+  /** 当前打开会话 id，用于高亮 */
   activeId: string
-  /** 每个会话可用的操作菜单。 */
+  /** 每个会话可用的操作菜单 */
   actions: ConversationMenuAction[]
 }>()
 
-/** 向侧边栏派发的列表交互事件。 */
+/** 向侧边栏派发的列表交互事件 */
 const emit = defineEmits<{
-  /** 请求打开指定会话。 */
+  /** 请求打开指定会话 */
   select: [conversation: ConversationSummary]
-  /** 请求执行指定会话操作。 */
+  /** 请求执行指定会话操作 */
   action: [action: ConversationActionKey, conversation: ConversationSummary]
 }>()
 </script>

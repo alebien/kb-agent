@@ -1,13 +1,13 @@
 <script setup lang="ts">
-/** 输入框内容，通过 v-model 与父组件双向绑定。 */
+/** 输入框内容，通过 v-model 与父组件双向绑定 */
 const model = defineModel<string>({ default: '' })
 
-/** 输入框的占位与加载状态配置。 */
+/** 输入框的占位与加载状态配置 */
 const props = withDefaults(
   defineProps<{
-    /** 输入框占位文案。 */
+    /** 输入框占位文案 */
     placeholder?: string
-    /** 是否处于发送中状态，禁用输入与按钮。 */
+    /** 是否处于发送中状态，禁用输入与按钮 */
     loading?: boolean
   }>(),
   {
@@ -16,15 +16,15 @@ const props = withDefaults(
   },
 )
 
-/** 向父组件派发的提交事件。 */
+/** 向父组件派发的提交事件 */
 const emit = defineEmits<{
-  /** 提交非空内容时触发。 */
+  /** 提交非空内容时触发 */
   submit: [content: string]
 }>()
 
-/** 校验并提交输入内容，空白内容或加载中时忽略。 */
+/** 校验并提交输入内容，空白内容或加载中时忽略 */
 function submit() {
-  /** 去除首尾空白后的输入内容。 */
+  /** 去除首尾空白后的输入内容 */
   const content = model.value.trim()
   if (!content || props.loading) {
     return
@@ -32,7 +32,7 @@ function submit() {
   emit('submit', content)
 }
 
-/** 处理键盘事件：Enter 发送，Shift + Enter 换行，输入法组合中不拦截。 */
+/** 处理键盘事件：Enter 发送，Shift + Enter 换行，输入法组合中不拦截 */
 function handleKeydown(event: KeyboardEvent) {
   if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
     event.preventDefault()

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { Ticket } from '@/domain'
 
-/** 工单列表参数。 */
+/** 工单列表参数 */
 defineProps<{
-  /** 待展示的工单。 */
+  /** 待展示的工单 */
   items: Ticket[]
 }>()
 </script>

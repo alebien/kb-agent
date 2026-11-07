@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { EvalCase } from '@/domain'
 
-/** 评测用例列表参数。 */
+/** 评测用例列表参数 */
 defineProps<{
-  /** 待展示的评测用例。 */
+  /** 待展示的评测用例 */
   items: EvalCase[]
 }>()
 </script>

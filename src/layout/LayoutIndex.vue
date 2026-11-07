@@ -5,30 +5,30 @@ import AppHeader from '@/components/layout/AppHeader.vue'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import { useAppViewportHeight } from '@/composables/useAppViewportHeight'
 
-/** 当前路由信息，路由变化时关闭移动端抽屉。 */
+/** 当前路由信息，路由变化时关闭移动端抽屉 */
 const route = useRoute()
-/** 移动端侧边栏抽屉是否打开。 */
+/** 移动端侧边栏抽屉是否打开 */
 const isSidebarOpen = ref(false)
-/** 桌面端侧边栏折叠状态在 localStorage 中的键名。 */
+/** 桌面端侧边栏折叠状态在 localStorage 中的键名 */
 const sidebarCollapsedKey = 'kb-agent:sidebar-collapsed'
-/** 桌面端侧边栏是否折叠，初始值从 localStorage 恢复。 */
+/** 桌面端侧边栏是否折叠，初始值从 localStorage 恢复 */
 const isSidebarCollapsed = ref(
   typeof window !== 'undefined' && window.localStorage.getItem(sidebarCollapsedKey) === '1',
 )
 
 useAppViewportHeight()
 
-/** 打开移动端侧边栏抽屉。 */
+/** 打开移动端侧边栏抽屉 */
 function openSidebar() {
   isSidebarOpen.value = true
 }
 
-/** 关闭移动端侧边栏抽屉。 */
+/** 关闭移动端侧边栏抽屉 */
 function closeSidebar() {
   isSidebarOpen.value = false
 }
 
-/** 切换桌面端侧边栏折叠状态。 */
+/** 切换桌面端侧边栏折叠状态 */
 function toggleSidebarCollapse() {
   isSidebarCollapsed.value = !isSidebarCollapsed.value
 }

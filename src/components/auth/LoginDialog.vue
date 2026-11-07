@@ -6,31 +6,31 @@ import type { FormInstance, FormRules, InputInstance } from 'element-plus'
 import { login as requestLogin } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 
-/** 登录状态 store，提供弹窗开关与登录写入。 */
+/** 登录状态 store，提供弹窗开关与登录写入 */
 const authStore = useAuthStore()
-/** 路由实例，登录成功后返回受保护页面。 */
+/** 路由实例，登录成功后返回受保护页面 */
 const router = useRouter()
 
-/** 登录表单实例，用于提交前校验。 */
+/** 登录表单实例，用于提交前校验 */
 const formRef = ref<FormInstance>()
-/** 密码输入框实例，打开弹窗时自动聚焦。 */
+/** 密码输入框实例，打开弹窗时自动聚焦 */
 const passwordInputRef = ref<InputInstance>()
-/** 是否正在提交登录请求。 */
+/** 是否正在提交登录请求 */
 const isSubmitting = ref(false)
-/** 弹窗当前是否处于打开状态，避免关闭后延迟聚焦。 */
+/** 弹窗当前是否处于打开状态，避免关闭后延迟聚焦 */
 let isDialogActive = false
 
-/** 登录表单数据。 */
+/** 登录表单数据 */
 const form = reactive({
-  /** 登录账号。 */
+  /** 登录账号 */
   account: '',
-  /** 登录密码。 */
+  /** 登录密码 */
   password: '',
-  /** 是否记住账号，下次打开自动预填。 */
+  /** 是否记住账号，下次打开自动预填 */
   remember: true,
 })
 
-/** 表单校验规则。 */
+/** 表单校验规则 */
 const rules: FormRules<typeof form> = {
   account: [
     { required: true, message: '请输入账号', trigger: 'blur' },
@@ -42,7 +42,7 @@ const rules: FormRules<typeof form> = {
   ],
 }
 
-/** 登录弹窗的显隐状态，与 auth store 双向同步。 */
+/** 登录弹窗的显隐状态，与 auth store 双向同步 */
 const visible = computed({
   get: () => authStore.isLoginDialogOpen,
   set: (value: boolean) => {
@@ -55,7 +55,7 @@ const visible = computed({
   },
 })
 
-/** 每次打开弹窗时重置表单，并预填上次记住的账号。 */
+/** 每次打开弹窗时重置表单，并预填上次记住的账号 */
 function handleOpen() {
   form.account = authStore.rememberedAccount
   form.password = ''
@@ -70,13 +70,13 @@ function handleOpen() {
   }, 60)
 }
 
-/** 关闭动画结束后清理错误提示，避免下次打开闪现旧状态。 */
+/** 关闭动画结束后清理错误提示，避免下次打开闪现旧状态 */
 function handleClosed() {
   isDialogActive = false
   formRef.value?.resetFields()
 }
 
-/** 校验表单并提交登录请求。 */
+/** 校验表单并提交登录请求 */
 async function submitLogin() {
   if (isSubmitting.value) {
     return
@@ -98,7 +98,7 @@ async function submitLogin() {
     authStore.setRememberedAccount(form.remember ? form.account : '')
     authStore.login(result.user, result.token)
 
-    /** 登录前被拦截的目标地址。 */
+    /** 登录前被拦截的目标地址 */
     const redirect = authStore.consumePendingRedirect()
     authStore.closeLoginDialog()
     ElMessage.success(`欢迎回来，${result.user.name}`)
@@ -107,7 +107,7 @@ async function submitLogin() {
       await router.push(redirect)
     }
   } catch (error) {
-    /** 接口返回的错误信息，未知错误使用兜底文案。 */
+    /** 接口返回的错误信息，未知错误使用兜底文案 */
     const message = error instanceof Error ? error.message : '登录失败，请稍后重试'
     ElMessage.error(message)
   } finally {
@@ -115,7 +115,7 @@ async function submitLogin() {
   }
 }
 
-/** 回车提交，输入法组合中不拦截。 */
+/** 回车提交，输入法组合中不拦截 */
 function handleSubmitKeydown(event: KeyboardEvent) {
   if (event.key === 'Enter' && !event.isComposing) {
     event.preventDefault()

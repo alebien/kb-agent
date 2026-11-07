@@ -4,24 +4,24 @@ import { useRoute } from 'vue-router'
 import HeaderActions from './HeaderActions.vue'
 
 defineProps<{
-  /** 移动端侧边栏是否打开，用于同步按钮的展开状态。 */
+  /** 移动端侧边栏是否打开，用于同步按钮的展开状态 */
   navOpen: boolean
 }>()
 
-/** 向父组件派发的顶部栏事件。 */
+/** 向父组件派发的顶部栏事件 */
 const emit = defineEmits<{
   'open-nav': []
 }>()
 
-/** 当前路由信息，用于读取页面标题与状态。 */
+/** 当前路由信息，用于读取页面标题与状态 */
 const route = useRoute()
 
-/** 顶部栏页面标题，取路由 meta 配置。 */
+/** 顶部栏页面标题，取路由 meta 配置 */
 const pageTitle = computed(() => (route.meta.pageTitle as string | undefined) ?? '企业知识库 Agent')
-/** 标题右侧的状态标签文案。 */
+/** 标题右侧的状态标签文案 */
 const status = computed(() => route.meta.status as string | undefined)
 
-/** 请求父组件打开移动端侧边栏。 */
+/** 请求父组件打开移动端侧边栏 */
 function openNav() {
   emit('open-nav')
 }
