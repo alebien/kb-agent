@@ -7,6 +7,8 @@ import ChatMessageItem from './ChatMessageItem.vue'
 const props = defineProps<{
   /** 当前会话的消息列表，引用与工具调用都挂在各自的助手消息上 */
   messages: Message[]
+  /** 最近一次转人工产生的工单号，展示在低置信度回答下方 */
+  ticketCode?: string
 }>()
 
 /** 向页面派发的消息操作事件 */
@@ -195,6 +197,7 @@ onBeforeUnmount(() => {
           v-memo="[message.content, message.status, message.id === lastMessageId]"
           :message="message"
           :can-retry="message.id === lastMessageId"
+          :ticket-code="ticketCode"
           @retry="emit('retry', $event)"
           @stop="emit('stop', $event)"
           @delete="emit('delete', $event)"

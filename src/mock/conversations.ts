@@ -1,4 +1,4 @@
-﻿import type { ConversationSummary } from '@/domain'
+import type { ConversationSummary } from '@/domain'
 
 /**
  * 预置的会话摘要 mock 数据
@@ -6,6 +6,20 @@
  * createdBy 决定会话归属，演示时两个同角色账号各有一批数据
  */
 export const conversations: ConversationSummary[] = [
+  {
+    id: 'e8d4f7a2-3b69-4c15-9f08-6a2d5e1b7c40',
+    title: '赔付时效咨询 · 退款',
+    createdBy: 'u_1001',
+    createdAt: '2026-11-04T09:08:00+08:00',
+    updatedAt: '2026-11-04T09:16:00+08:00',
+  },
+  {
+    id: '7b2d9e51-4c84-4a37-b1e6-0f8c5d3a6e29',
+    title: '退款还是发票？',
+    createdBy: 'u_1001',
+    createdAt: '2026-11-04T08:36:00+08:00',
+    updatedAt: '2026-11-04T08:42:00+08:00',
+  },
   {
     id: '9f2c4e1a-7b3d-4c8f-a1e6-2d5b8c0f4a71',
     title: '退款政策咨询 · A1024',
@@ -43,5 +57,5 @@ export const conversations: ConversationSummary[] = [
   },
 ]
 
-/** 默认会话 id，供演示或兜底跳转使用 */
-export const defaultConversationId = conversations[0]!.id
+/** 默认会话 id，固定指向退款政策场景，避免演示默认落在低置信度结果 */
+export const defaultConversationId = '9f2c4e1a-7b3d-4c8f-a1e6-2d5b8c0f4a71'

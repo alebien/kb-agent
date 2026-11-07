@@ -10,9 +10,12 @@ const props = withDefaults(
     message: Message
     /** 是否为会话最后一条消息，只有最后一条助手消息允许重新生成 */
     canRetry?: boolean
+    /** 本轮转人工产生的工单号 */
+    ticketCode?: string
   }>(),
   {
     canRetry: false,
+    ticketCode: '',
   },
 )
 
@@ -37,6 +40,7 @@ const emit = defineEmits<{
     v-else-if="props.message.role === 'agent'"
     :message="props.message"
     :can-retry="props.canRetry"
+    :ticket-code="props.ticketCode"
     @retry="emit('retry', $event)"
     @stop="emit('stop', $event)"
     @delete="emit('delete', $event)"

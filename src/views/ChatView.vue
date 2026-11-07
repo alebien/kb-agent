@@ -62,6 +62,7 @@ watch(isStreaming, (streaming, previous) => {
           <ChatMessageList
             v-else-if="currentDetail && hasMessages"
             :messages="currentDetail.messages"
+            :ticket-code="currentDetail.ticketCode ?? ''"
             @retry="retry"
             @stop="stop"
             @delete="removeMessage"

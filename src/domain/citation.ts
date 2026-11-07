@@ -16,4 +16,6 @@ export interface Citation {
   page?: number
   /** 检索相似度分数，取值 0-1 */
   score?: number
+  /** 来源是否已下线，下线时卡片置灰且不可点击 */
+  unavailable?: boolean
 }
