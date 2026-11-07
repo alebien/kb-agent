@@ -50,5 +50,17 @@ export const useConversationStore = defineStore('conversations', () => {
     }
   }
 
-  return { list, isLoading, load, add, remove, updateTitle }
+  /** 更新指定会话在列表中的更新时间，并移动到列表顶部 */
+  function updateTime(id: string, updatedAt: string) {
+    /** 需要更新的会话项 */
+    const summary = list.value.find((conversation) => conversation.id === id)
+    if (!summary) {
+      return
+    }
+
+    summary.updatedAt = updatedAt
+    list.value = [summary, ...list.value.filter((conversation) => conversation.id !== id)]
+  }
+
+  return { list, isLoading, load, add, remove, updateTitle, updateTime }
 })

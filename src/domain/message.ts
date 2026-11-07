@@ -39,6 +39,12 @@ export interface AgentMessage extends MessageBase {
   error?: string
   /** 生成该消息所用的模型名称 */
   model?: string
+  /** 本轮回答对应的用户提问 id，重试时据此定位原始问题 */
+  replyToMessageId?: string
+  /** 本轮回答开始生成的时间，ISO 8601 字符串；用于停止后保留已生成内容 */
+  startedAt?: string
+  /** 本轮回答完成时间，ISO 8601 字符串；流式过程中为空 */
+  completedAt?: string
 }
 
 /** 系统消息 */

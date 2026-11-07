@@ -1,14 +1,128 @@
-import type { Conversation, ConversationSummary } from '@/domain'
+import type { AgentMessage, Conversation, ConversationSummary, Message } from '@/domain'
 import { conversations, defaultConversationId } from '@/mock/conversations'
+import { formatDate, toLocalIsoString } from '@/utils/datetime'
 
 /** 会话详情缓存，key 为会话 id，避免重复构造 mock 数据 */
 const details = new Map<string, Conversation>()
+
+/** 正在生成的回答控制器，key 为助手消息 id，用于停止流式输出 */
+const answerControllers = new Map<string, AbortController>()
 
 /** 模拟网络延迟，统一返回传入的值 */
 function delay<T>(value: T, milliseconds = 280): Promise<T> {
   return new Promise((resolve) => {
     window.setTimeout(() => resolve(value), milliseconds)
   })
+}
+
+/** 生成助手回答的 Markdown mock 内容，按提问关键词返回不同业务场景 */
+function buildAnswerContent(prompt: string): string {
+  /** 归一化后的提问，便于匹配关键词 */
+  const normalized = prompt.toLowerCase()
+
+  if (normalized.includes('发票')) {
+    return `## 发票处理建议
+
+已为你检索到发票相关规则，可以先按下面步骤确认：
+
+1. 核对开票主体与税号是否正确
+2. 电子普票在开具后 **30 天内** 可申请换开
+3. 跨月换开需要先红冲原发票
+
+> 如果订单已报销，请先确认财务是否接受红冲后的新票
+
+| 场景 | 处理方式 |
+| --- | --- |
+| 抬头错误 | 申请换开 |
+| 金额错误 | 红冲后重开 |
+| 超过 30 天 | 转人工审核 |
+
+需要我继续帮你查询具体订单的发票状态吗？`
+  }
+
+  if (normalized.includes('物流') || normalized.includes('快递')) {
+    return `## 物流异常排查
+
+可以按以下顺序确认包裹状态：
+
+1. 查看物流轨迹是否超过 **48 小时** 未更新
+2. 核对收件地址与联系电话是否完整
+3. 联系承运方确认是否发生分拣异常
+
+如果确认丢件，可以提交工单并附上订单号，客服会在 **4 小时内** 首次响应
+
+> 涉及赔付时，请保留物流截图与商品价值凭证`
+  }
+
+  if (normalized.includes('会员') || normalized.includes('积分')) {
+    return `## 会员权益说明
+
+当前会员等级按近 **12 个月** 的实付金额计算，权益包含：
+
+- 专属客服通道
+- 生日双倍积分
+- 每月免运费券
+
+积分有效期为获取后 **24 个月**，过期前 30 天会通过站内信提醒`
+  }
+
+  return `## 处理结论
+
+已结合企业知识库检索「${prompt}」，建议先确认订单状态与适用政策：
+
+1. 核对订单是否在售后时效内
+2. 确认商品当前状态与凭证是否齐全
+3. 按对应政策提交申请并保留沟通记录
+
+> 若涉及金额变更或发票重开，建议转人工复核
+
+| 项目 | 说明 |
+| --- | --- |
+| 处理时效 | 1 个工作日内 |
+| 退款路径 | 原路退回 |
+| 人工介入 | 涉及金额变更时 |
+
+如需继续处理，请补充订单号。`
+}
+
+/** 将长回答切成适合逐字追加的片段，模拟 SSE 增量文本 */
+function splitAnswer(content: string): string[] {
+  /** 每个片段包含的字符数，越小流式效果越细腻 */
+  const chunkSize = 3
+  /** 切片后的文本片段 */
+  const chunks: string[] = []
+
+  for (let index = 0; index < content.length; index += chunkSize) {
+    chunks.push(content.slice(index, index + chunkSize))
+  }
+
+  return chunks
+}
+
+/** 按会话 id 获取缓存详情，不存在时抛出错误 */
+function requireDetail(id: string): Conversation {
+  /** 当前会话详情 */
+  const conversation = details.get(id)
+  if (!conversation) {
+    throw new Error(`Conversation ${id} not found`)
+  }
+
+  return conversation
+}
+
+/** 同步会话状态与摘要更新时间 */
+function touchConversation(conversation: Conversation, status: Conversation['status']) {
+  /** 当前时间 */
+  const now = new Date()
+  conversation.status = status
+  // 摘要的 updatedAt 语义是带时区 ISO 字符串，这里统一走工具函数生成本地时间
+  conversation.summary.updatedAt = toLocalIsoString(now)
+
+  /** 原始会话摘要，需要同步侧边栏列表 */
+  const summary = conversations.find((item) => item.id === conversation.summary.id)
+  if (summary) {
+    summary.updatedAt = conversation.summary.updatedAt
+  }
 }
 
 /** 按会话 id 构造并缓存一份会话详情 */
@@ -23,14 +137,16 @@ function detail(id: string): Conversation {
     return details.get(id)!
   }
 
-  /** mock 消息的创建时间，使用会话更新时间保持稳定 */
-  const createdAt = `${summary.updatedAt.replace(' ', 'T')}:00`
+  /** mock 消息的创建时间，摘要更新时间已是 ISO 字符串，可直接复用 */
+  const createdAt = summary.updatedAt
 
   /** 首次访问时创建的会话详情 */
   const created: Conversation = {
     summary,
     status: 'completed',
     confidence: 92,
+    // 意图识别置信度，mock 里固定给一个高于 0.6 阈值的值
+    intentConfidence: 0.93,
     ticket: '#T-2048',
     traceId: summary.id.slice(0, 6),
     messages: [
@@ -54,7 +170,7 @@ function detail(id: string): Conversation {
           {
             id: `${id}-policy`,
             name: '企业服务政策 v3.2.pdf',
-            description: `对应场景 · 更新于 ${summary.updatedAt.slice(0, 10)}`,
+            description: `对应场景 · 更新于 ${formatDate(summary.updatedAt)}`,
             snippet: '符合本场景的用户，可在签收后 7 天内提交申请，审核通过后原路退回',
             score: 0.92,
           },
@@ -119,28 +235,379 @@ export async function fetchConversationDetail(id: string): Promise<Conversation>
   /** 命中的缓存详情 */
   const cached = details.get(id)
   if (cached) {
-    return cached
+    return cloneConversation(cached)
   }
 
-  return delay(detail(id))
+  return delay(cloneConversation(detail(id)))
+}
+
+/** 流式回答的进度回调参数 */
+export interface AnswerStreamHandlers {
+  /** 流式开始，返回本次助手消息 id */
+  onStart?: (answerId: string) => void
+  /** 收到一个增量文本片段 */
+  onChunk: (chunk: string) => void
+  /** 消息快照更新，用于把 mock 缓存中的最新消息同步到页面响应式状态 */
+  onUpdate?: (messages: Message[]) => void
+  /** 流式正常结束 */
+  onDone: (message: AgentMessage) => void
+  /** 流式被用户停止 */
+  onStopped: (message: AgentMessage) => void
+  /** 流式异常 */
+  onError: (message: AgentMessage) => void
+}
+
+/** 发送用户消息时的可选项 */
+export interface SendMessageOptions {
+  /** 复用创建会话时已写入的用户消息 id，避免首问重复追加 */
+  reuseUserMessageId?: string
+}
+
+/** 生成当前会话消息的深拷贝快照，避免调用方直接持有 mock 缓存引用 */
+function snapshotMessages(messages: Message[]): Message[] {
+  return messages.map((message) => {
+    if (message.role !== 'agent') {
+      return { ...message }
+    }
+
+    return {
+      ...message,
+      citations: message.citations.map((citation) => ({ ...citation })),
+      toolCalls: message.toolCalls.map((toolCall) => ({ ...toolCall })),
+    }
+  })
+}
+
+/** 深拷贝会话详情，页面持有副本后不会反向覆盖 mock 缓存中的消息数组 */
+function cloneConversation(conversation: Conversation): Conversation {
+  return {
+    ...conversation,
+    summary: { ...conversation.summary },
+    messages: snapshotMessages(conversation.messages),
+    stats: { ...conversation.stats },
+    qualityMetrics: conversation.qualityMetrics.map((metric) => ({ ...metric })),
+    traceSteps: conversation.traceSteps.map((step) => ({ ...step })),
+  }
+}
+
+/** 把 mock 缓存中的最新消息、状态与摘要同步给页面 */
+function notifyConversationUpdate(conversation: Conversation, handlers: AnswerStreamHandlers) {
+  handlers.onUpdate?.(snapshotMessages(conversation.messages))
+}
+
+/** 发送一条用户提问时返回的结果 */
+export interface SendMessageResult {
+  /** 会话最新的摘要，更新时间已刷新 */
+  summary: ConversationSummary
+  /** 本次生成的助手消息 id，用于停止与重试 */
+  answerId: string
+}
+
+/**
+ * 发送用户消息并以 mock 定时器模拟 SSE 增量输出
+ * `onChunk` 只负责把增量文本追加到 UI，完整消息仍在接口结束时回传
+ */
+export async function sendMessage(
+  id: string,
+  content: string,
+  handlers: AnswerStreamHandlers,
+  options: SendMessageOptions = {},
+): Promise<SendMessageResult> {
+  /** 当前会话详情 */
+  const conversation = requireDetail(id)
+  /** 去除首尾空白后的提问 */
+  const prompt = content.trim()
+  if (!prompt) {
+    throw new Error('消息内容不能为空')
+  }
+
+  /** 用户消息与助手消息共用的毫秒时间戳 */
+  const now = new Date()
+  /** 用户消息唯一标识，首问复用创建会话时写入的 id */
+  const userMessageId = options.reuseUserMessageId ?? `${id}-user-${now.getTime()}`
+  /** 助手消息唯一标识 */
+  const answerId = `${id}-agent-${now.getTime()}`
+
+  /** 新写入的用户消息 */
+  const userMessage: Message = {
+    id: userMessageId,
+    conversationId: id,
+    role: 'user',
+    content: prompt,
+    status: 'completed',
+    createdAt: now.toISOString(),
+  }
+
+  /** 正在流式生成的助手消息 */
+  const answer: AgentMessage = {
+    id: answerId,
+    conversationId: id,
+    role: 'agent',
+    content: '',
+    status: 'streaming',
+    createdAt: now.toISOString(),
+    startedAt: now.toISOString(),
+    replyToMessageId: userMessageId,
+    citations: [],
+    toolCalls: [],
+  }
+
+  /** 首问复用创建会话时已写入的用户消息，只追加助手消息 */
+  if (options.reuseUserMessageId) {
+    conversation.messages.push(answer)
+  } else {
+    conversation.messages.push(userMessage, answer)
+  }
+  touchConversation(conversation, 'processing')
+  notifyConversationUpdate(conversation, handlers)
+
+  /** 当前回答的停止控制器 */
+  const controller = new AbortController()
+  answerControllers.set(answerId, controller)
+  handlers.onStart?.(answerId)
+
+  /** 本次回答的完整 Markdown 内容 */
+  const fullContent = buildAnswerContent(prompt)
+  /** 切片后的增量文本 */
+  const chunks = splitAnswer(fullContent)
+
+  try {
+    for (const chunk of chunks) {
+      if (controller.signal.aborted) {
+        answer.status = 'stopped'
+        answer.completedAt = new Date().toISOString()
+        touchConversation(conversation, 'completed')
+        notifyConversationUpdate(conversation, handlers)
+        handlers.onStopped(answer)
+        return { summary: { ...conversation.summary }, answerId }
+      }
+
+      // 模拟每个 SSE 事件间隔，长回答可被用户中途停止
+      await delay(undefined, 24)
+      // 停止可能发生在等待期间，此时不再追加新片段
+      if (controller.signal.aborted) {
+        answer.status = 'stopped'
+        answer.completedAt = new Date().toISOString()
+        touchConversation(conversation, 'completed')
+        notifyConversationUpdate(conversation, handlers)
+        handlers.onStopped(answer)
+        return { summary: { ...conversation.summary }, answerId }
+      }
+      answer.content += chunk
+      handlers.onChunk(chunk)
+      notifyConversationUpdate(conversation, handlers)
+    }
+
+    answer.status = 'completed'
+    answer.completedAt = new Date().toISOString()
+    answer.citations = [
+      {
+        id: `${answerId}-citation`,
+        name: '售后退款政策_v2.pdf',
+        description: '售后政策库 · 更新于 2026-10-20',
+        snippet: '符合本场景的用户，可在签收后 7 天内提交申请，审核通过后原路退回',
+        score: 0.92,
+      },
+    ]
+    answer.toolCalls = [
+      {
+        id: `${answerId}-search`,
+        name: 'search_knowledge',
+        arguments: { query: prompt, top_k: 5 },
+        status: 'success',
+        result: { hits: 1, topScore: 0.92 },
+        durationMs: 260,
+      },
+    ]
+    conversation.stats.duration += 1200
+    conversation.stats.tokens += fullContent.length
+    conversation.stats.citations = conversation.messages.reduce(
+      (count, message) => count + (message.role === 'agent' ? message.citations.length : 0),
+      0,
+    )
+    touchConversation(conversation, 'completed')
+    notifyConversationUpdate(conversation, handlers)
+    handlers.onDone(answer)
+  } catch (error) {
+    answer.status = 'failed'
+    answer.error = error instanceof Error ? error.message : '生成失败'
+    answer.completedAt = new Date().toISOString()
+    touchConversation(conversation, 'failed')
+    notifyConversationUpdate(conversation, handlers)
+    handlers.onError(answer)
+  } finally {
+    answerControllers.delete(answerId)
+  }
+
+  return { summary: { ...conversation.summary }, answerId }
+}
+
+/** 停止正在生成的回答，保留已生成的文本 */
+export async function stopMessage(id: string, answerId: string): Promise<void> {
+  /** 当前会话详情 */
+  const conversation = requireDetail(id)
+  /** 正在生成回答的控制器 */
+  const controller = answerControllers.get(answerId)
+  if (!controller) {
+    return
+  }
+
+  controller.abort()
+  /** 被停止的助手消息 */
+  const answer = conversation.messages.find((message) => message.id === answerId)
+  if (answer?.role === 'agent') {
+    answer.status = 'stopped'
+    answer.completedAt = new Date().toISOString()
+  }
+  touchConversation(conversation, 'completed')
+}
+
+/** 删除一条消息及其后续消息，返回删除后的完整消息列表 */
+export async function deleteMessage(id: string, messageId: string): Promise<Message[]> {
+  /** 当前会话详情 */
+  const conversation = requireDetail(id)
+  /** 待删除消息的下标 */
+  const index = conversation.messages.findIndex((message) => message.id === messageId)
+  if (index === -1) {
+    throw new Error(`Message ${messageId} not found`)
+  }
+
+  await delay(undefined, 120)
+  conversation.messages.splice(index, 1)
+  touchConversation(conversation, conversation.messages.length ? 'completed' : 'idle')
+
+  return conversation.messages.map((message) => ({ ...message }))
+}
+
+/**
+ * 重新生成一条助手回答
+ * 先清空原回答保留消息位置，再按原提问重新流式生成，避免页面出现重复回答
+ */
+export async function regenerateMessage(
+  id: string,
+  answerId: string,
+  handlers: AnswerStreamHandlers,
+): Promise<void> {
+  /** 当前会话详情 */
+  const conversation = requireDetail(id)
+  /** 待重试的助手消息 */
+  const answer = conversation.messages.find((message) => message.id === answerId)
+  if (!answer || answer.role !== 'agent') {
+    throw new Error(`Agent message ${answerId} not found`)
+  }
+
+  /** 原始用户提问 */
+  const promptMessage = conversation.messages.find(
+    (message) => message.id === answer.replyToMessageId,
+  )
+  /** 原始提问文本，找不到时回退到会话标题 */
+  const prompt = promptMessage?.content ?? conversation.summary.title
+
+  answer.content = ''
+  answer.status = 'streaming'
+  answer.error = undefined
+  answer.citations = []
+  answer.toolCalls = []
+  answer.startedAt = new Date().toISOString()
+  touchConversation(conversation, 'processing')
+  notifyConversationUpdate(conversation, handlers)
+
+  /** 当前重试请求的停止控制器 */
+  const controller = new AbortController()
+  answerControllers.set(answerId, controller)
+  handlers.onStart?.(answerId)
+
+  /** 重试时重新生成的内容 */
+  const fullContent = buildAnswerContent(prompt)
+  /** 重试内容切片 */
+  const chunks = splitAnswer(fullContent)
+
+  try {
+    for (const chunk of chunks) {
+      if (controller.signal.aborted) {
+        answer.status = 'stopped'
+        answer.completedAt = new Date().toISOString()
+        touchConversation(conversation, 'completed')
+        notifyConversationUpdate(conversation, handlers)
+        handlers.onStopped(answer)
+        return
+      }
+
+      await delay(undefined, 24)
+      // 停止可能发生在等待期间，此时不再追加新片段
+      if (controller.signal.aborted) {
+        answer.status = 'stopped'
+        answer.completedAt = new Date().toISOString()
+        touchConversation(conversation, 'completed')
+        notifyConversationUpdate(conversation, handlers)
+        handlers.onStopped(answer)
+        return
+      }
+      answer.content += chunk
+      handlers.onChunk(chunk)
+      notifyConversationUpdate(conversation, handlers)
+    }
+
+    answer.status = 'completed'
+    answer.completedAt = new Date().toISOString()
+    answer.citations = [
+      {
+        id: `${answerId}-citation`,
+        name: '售后退款政策_v2.pdf',
+        description: '售后政策库 · 更新于 2026-10-20',
+        snippet: '符合本场景的用户，可在签收后 7 天内提交申请，审核通过后原路退回',
+        score: 0.92,
+      },
+    ]
+    answer.toolCalls = [
+      {
+        id: `${answerId}-search`,
+        name: 'search_knowledge',
+        arguments: { query: prompt, top_k: 5 },
+        status: 'success',
+        result: { hits: 1, topScore: 0.92 },
+        durationMs: 260,
+      },
+    ]
+    conversation.stats.citations = conversation.messages.reduce(
+      (count, message) => count + (message.role === 'agent' ? message.citations.length : 0),
+      0,
+    )
+    touchConversation(conversation, 'completed')
+    notifyConversationUpdate(conversation, handlers)
+    handlers.onDone(answer)
+  } catch (error) {
+    answer.status = 'failed'
+    answer.error = error instanceof Error ? error.message : '生成失败'
+    answer.completedAt = new Date().toISOString()
+    touchConversation(conversation, 'failed')
+    notifyConversationUpdate(conversation, handlers)
+    handlers.onError(answer)
+  } finally {
+    answerControllers.delete(answerId)
+  }
+}
+
+/** 创建新会话时返回的摘要与完整详情 */
+export interface CreatedConversation {
+  /** 会话摘要 */
+  summary: ConversationSummary
+  /** 会话详情，供页面直接使用，避免再发一次详情请求 */
+  detail: Conversation
 }
 
 /** 创建新会话，生成 UUID 并写入 mock 数据 */
-export async function createConversation(initialMessage?: string): Promise<ConversationSummary> {
+export async function createConversation(initialMessage?: string): Promise<CreatedConversation> {
   /** 浏览器生成的会话唯一标识 */
   const uuid = window.crypto.randomUUID()
   /** 去除首尾空白后的首条提问 */
   const prompt = initialMessage?.trim() ?? ''
   /** 用于生成标题的单行文本 */
   const titleSource = prompt.replace(/\s+/g, ' ')
-  /** 当前时间，用于生成展示用创建时间 */
+  /** 当前时间，用于生成摘要与消息的 ISO 时间 */
   const now = new Date()
-  /** 格式化后的创建时间 */
-  const createdAt = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
-    now.getDate(),
-  ).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(
-    now.getMinutes(),
-  ).padStart(2, '0')}`
+  /** 带时区的本地 ISO 时间，摘要 updatedAt 与首条消息共用 */
+  const createdAt = toLocalIsoString(now)
   /** 新会话的摘要信息 */
   const summary: ConversationSummary = {
     id: uuid,
@@ -155,7 +622,7 @@ export async function createConversation(initialMessage?: string): Promise<Conve
   /** mock 消息使用的 ISO 时间 */
   const messageCreatedAt = now.toISOString()
 
-  /** 新会话的初始消息，没有提问时为空数组 */
+  /** 新会话只写入用户提问，助手回答由发送接口按流式过程追加 */
   const messages: Conversation['messages'] = prompt
     ? [
         {
@@ -166,23 +633,13 @@ export async function createConversation(initialMessage?: string): Promise<Conve
           status: 'completed',
           createdAt: messageCreatedAt,
         },
-        {
-          id: `${uuid}-agent`,
-          conversationId: uuid,
-          role: 'agent',
-          content:
-            '已收到你的问题，正在结合企业知识库进行检索。当前为演示环境，接入真实服务后将返回实际结果。',
-          status: 'completed',
-          createdAt: messageCreatedAt,
-          citations: [],
-          toolCalls: [],
-        },
       ]
     : []
 
-  details.set(uuid, {
+  /** 新建会话的完整详情 */
+  const createdDetail: Conversation = {
     summary,
-    status: 'completed',
+    status: prompt ? 'processing' : 'idle',
     confidence: null,
     ticket: null,
     traceId: 'draft',
@@ -195,10 +652,12 @@ export async function createConversation(initialMessage?: string): Promise<Conve
     },
     qualityMetrics: [],
     traceSteps: [],
-  })
+  }
+
+  details.set(uuid, createdDetail)
 
   conversations.unshift(summary)
-  return delay({ ...summary }, 160)
+  return delay({ summary: { ...summary }, detail: cloneConversation(createdDetail) }, 160)
 }
 
 /** 删除一个会话，同时清理对应的详情缓存 */

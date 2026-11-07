@@ -1,45 +1,136 @@
 <script setup lang="ts">
-import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
-import type { Message } from '@/domain'
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import type { AgentMessage, Message, UserMessage } from '@/domain'
+import AgentMessageItem from './AgentMessageItem.vue'
+import UserMessageItem from './UserMessageItem.vue'
 
-defineProps<{
+/** 当前会话的消息列表 */
+const props = defineProps<{
   /** 当前会话的消息列表，引用与工具调用都挂在各自的助手消息上 */
   messages: Message[]
 }>()
+
+/** 向页面派发的消息操作事件 */
+const emit = defineEmits<{
+  /** 请求重新生成指定助手消息 */
+  retry: [message: AgentMessage]
+  /** 请求停止指定助手消息 */
+  stop: [message: AgentMessage]
+  /** 请求删除指定消息 */
+  delete: [message: UserMessage | AgentMessage]
+}>()
+
+/** 消息滚动容器实例 */
+const scrollbarRef = ref<{ wrapRef?: HTMLElement }>()
+/** 用户是否停留在底部，上滑阅读时不强制跟随 */
+const isNearBottom = ref(true)
+/** 是否展示回到底部按钮 */
+const showBackToBottom = ref(false)
+
+/** 获取真实滚动容器，Element Plus 的 scrollbar 实例包含 wrapRef */
+function getScrollWrap(): HTMLElement | null {
+  return scrollbarRef.value?.wrapRef ?? null
+}
+
+/** 判断滚动位置是否接近底部，容忍 80px 误差 */
+function updateScrollState() {
+  /** 当前滚动容器 */
+  const wrap = getScrollWrap()
+  if (!wrap) {
+    return
+  }
+
+  /** 距离底部剩余的滚动距离 */
+  const distance = wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight
+  isNearBottom.value = distance < 80
+  showBackToBottom.value = distance > 240
+}
+
+/** 滚动到底部，用于发送消息、流式追加和回到底部按钮 */
+async function scrollToBottom() {
+  await nextTick()
+  /** 当前滚动容器 */
+  const wrap = getScrollWrap()
+  if (!wrap) {
+    return
+  }
+
+  wrap.scrollTop = wrap.scrollHeight
+  isNearBottom.value = true
+  showBackToBottom.value = false
+}
+
+/** 点击回到底部，恢复自动跟随 */
+function handleBackToBottom() {
+  void scrollToBottom()
+}
+
+// 消息变化时仅在用户停留在底部时自动跟随，避免打断向上阅读
+watch(
+  () => props.messages,
+  () => {
+    if (isNearBottom.value) {
+      void scrollToBottom()
+    }
+  },
+  { deep: true },
+)
+
+onMounted(() => {
+  const wrap = getScrollWrap()
+  wrap?.addEventListener('scroll', updateScrollState, { passive: true })
+  void scrollToBottom()
+})
+
+onBeforeUnmount(() => {
+  getScrollWrap()?.removeEventListener('scroll', updateScrollState)
+})
 </script>
 
 <template>
-  <el-scrollbar class="message-scroll">
-    <div class="message-stack">
-      <article
-        v-for="message in messages"
-        :key="message.id"
-        :class="['message-row', message.role === 'user' ? 'is-user' : 'is-agent']"
+  <div class="message-viewport">
+    <el-scrollbar ref="scrollbarRef" class="message-scroll">
+      <div class="message-stack">
+        <template v-for="message in messages" :key="message.id">
+          <UserMessageItem
+            v-if="message.role === 'user'"
+            :message="message"
+            @delete="emit('delete', $event)"
+          />
+          <AgentMessageItem
+            v-else-if="message.role === 'agent'"
+            :message="message"
+            @retry="emit('retry', $event)"
+            @stop="emit('stop', $event)"
+            @delete="emit('delete', $event)"
+          />
+        </template>
+      </div>
+    </el-scrollbar>
+
+    <Transition name="back-bottom">
+      <el-button
+        v-if="showBackToBottom"
+        class="back-to-bottom"
+        circle
+        aria-label="回到底部"
+        @click="handleBackToBottom"
       >
-        <div v-if="message.role === 'user'" class="user-bubble">
-          {{ message.content }}
-        </div>
-
-        <div v-else-if="message.role === 'agent'" class="agent-content">
-          <MarkdownRenderer :content="message.content" />
-
-          <div v-if="message.citations.length" class="message-sources">
-            <div v-for="citation in message.citations" :key="citation.id" class="source-card">
-              <strong>{{ citation.name }}</strong>
-              <p>{{ citation.description }}</p>
-            </div>
-          </div>
-        </div>
-
-        <div v-else class="agent-content">
-          <MarkdownRenderer :content="message.content" />
-        </div>
-      </article>
-    </div>
-  </el-scrollbar>
+        ↓
+      </el-button>
+    </Transition>
+  </div>
 </template>
 
 <style scoped>
+.message-viewport {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
 .message-scroll {
   flex: 1;
   min-height: 0;
@@ -54,61 +145,24 @@ defineProps<{
   padding: 24px var(--app-chat-inline-padding) 28px;
 }
 
-.message-row {
-  display: flex;
-  width: 100%;
+.back-to-bottom {
+  position: absolute;
+  right: 24px;
+  bottom: 12px;
+  box-shadow: var(--el-box-shadow-light);
 }
 
-.message-row.is-user {
-  justify-content: flex-end;
+.back-bottom-enter-active,
+.back-bottom-leave-active {
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease;
 }
 
-.message-row.is-agent {
-  justify-content: flex-start;
-}
-
-.user-bubble {
-  max-width: min(78%, 620px);
-  padding: 10px 16px;
-  line-height: 1.75;
-  white-space: pre-wrap;
-  background: var(--el-color-primary-light-9);
-  background: color-mix(in srgb, var(--el-color-primary-light-8) 55%, var(--el-bg-color));
-  border-radius: 14px;
-}
-
-.agent-content {
-  width: 100%;
-  padding: 0;
-}
-
-.agent-content :deep(.markdown-body) {
-  font-size: 14px;
-}
-
-.message-sources {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 20px;
-}
-
-.source-card {
-  padding: 12px 14px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 8px;
-}
-
-.source-card strong {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.source-card p {
-  margin: 4px 0 0;
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
+.back-bottom-enter-from,
+.back-bottom-leave-to {
+  opacity: 0;
+  transform: translateY(6px);
 }
 
 @media (max-width: 900px) {
@@ -124,19 +178,8 @@ defineProps<{
     padding-bottom: 20px;
   }
 
-  .user-bubble {
-    max-width: 88%;
-    padding: 9px 13px;
-  }
-
-  .message-sources {
-    grid-template-columns: 1fr;
-    gap: 8px;
-    margin-top: 14px;
-  }
-
-  .source-card {
-    padding: 8px 10px;
+  .back-to-bottom {
+    right: 16px;
   }
 }
 </style>
