@@ -18,10 +18,12 @@ export interface ConversationMenuAction {
   visible: boolean
 }
 
-/** 根据登录状态生成会话操作菜单，未登录时隐藏重命名 */
+/** 生成会话操作菜单时的权限参数 */
 export function createConversationMenuActions(options: {
-  /** 是否允许展示重命名操作 */
+  /** 是否拥有重命名权限 */
   canRename: boolean
+  /** 是否拥有删除权限 */
+  canDelete: boolean
 }): ConversationMenuAction[] {
   return [
     {
@@ -35,7 +37,7 @@ export function createConversationMenuActions(options: {
       label: '删除此对话',
       icon: 'trash',
       danger: true,
-      visible: true,
+      visible: options.canDelete,
     },
   ]
 }

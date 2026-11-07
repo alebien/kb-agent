@@ -16,6 +16,11 @@ export const tickets: Ticket[] = [
     tags: ['退款', '到账超期'],
     createdAt: '2026-11-03T20:22:00+08:00',
     updatedAt: '2026-11-05T09:40:00+08:00',
+    // high 优先级：首次响应 +2 小时、解决时限 +8 小时
+    firstResponseDueAt: '2026-11-03T22:22:00+08:00',
+    firstRespondedAt: '2026-11-03T21:10:00+08:00',
+    resolveDueAt: '2026-11-04T04:22:00+08:00',
+    slaStatus: 'on_track',
   },
   {
     id: 'b7e3c9d2-1a4f-4e8b-8c57-3d6f0a2b9e41',
@@ -32,6 +37,11 @@ export const tickets: Ticket[] = [
     createdAt: '2026-11-03T18:50:00+08:00',
     updatedAt: '2026-11-04T11:05:00+08:00',
     resolvedAt: '2026-11-04T11:05:00+08:00',
+    // medium 优先级：首次响应 +8 小时、解决时限 +24 小时，实际在时限内解决
+    firstResponseDueAt: '2026-11-04T02:50:00+08:00',
+    firstRespondedAt: '2026-11-03T19:40:00+08:00',
+    resolveDueAt: '2026-11-04T18:50:00+08:00',
+    slaStatus: 'on_track',
   },
   {
     id: 'e1a5d7f3-8c2b-4f9a-a6d4-0b3e7c1f5a28',
@@ -48,6 +58,13 @@ export const tickets: Ticket[] = [
     createdAt: '2026-11-02T16:35:00+08:00',
     updatedAt: '2026-11-03T10:20:00+08:00',
     resolvedAt: '2026-11-03T10:12:00+08:00',
+    // low 优先级：首次响应 +24 小时、解决时限 +72 小时，按时关闭
+    firstResponseDueAt: '2026-11-03T16:35:00+08:00',
+    firstRespondedAt: '2026-11-02T17:20:00+08:00',
+    resolveDueAt: '2026-11-05T16:35:00+08:00',
+    slaStatus: 'on_track',
+    closedAt: '2026-11-03T10:20:00+08:00',
+    closedReason: '客户已确认，正常关闭',
   },
   {
     id: '7c4b9e2a-3d8f-4b1c-95e7-2a6f8d0c4b73',
@@ -63,6 +80,11 @@ export const tickets: Ticket[] = [
     tags: ['物流', '丢件', '赔付'],
     createdAt: '2026-11-02T10:12:00+08:00',
     updatedAt: '2026-11-06T15:30:00+08:00',
+    // urgent 优先级：首次响应 +30 分钟、解决时限 +4 小时
+    firstResponseDueAt: '2026-11-02T10:42:00+08:00',
+    firstRespondedAt: '2026-11-02T10:30:00+08:00',
+    resolveDueAt: '2026-11-02T14:12:00+08:00',
+    slaStatus: 'on_track',
   },
   {
     id: 'a9f2d6c4-7e1b-4a5d-b8f3-6c0e4a2d9b17',
@@ -77,6 +99,12 @@ export const tickets: Ticket[] = [
     tags: ['话术', '知识库'],
     createdAt: '2026-11-01T14:45:00+08:00',
     updatedAt: '2026-11-01T14:45:00+08:00',
+    // low 优先级：首次响应 +24 小时、解决时限 +72 小时
+    firstResponseDueAt: '2026-11-02T14:45:00+08:00',
+    resolveDueAt: '2026-11-04T14:45:00+08:00',
+    slaStatus: 'on_track',
+    // 曾经 resolved 后被重新打开一次
+    reopenedCount: 1,
   },
   {
     id: '2d8b4f6a-9c3e-4d7b-8a15-7f2c9e0b6d34',
@@ -92,6 +120,11 @@ export const tickets: Ticket[] = [
     createdAt: '2026-10-18T09:20:00+08:00',
     updatedAt: '2026-10-21T17:45:00+08:00',
     resolvedAt: '2026-10-21T17:45:00+08:00',
+    // high 优先级：解决时限 +8 小时，实际跨部门核对导致超时
+    firstResponseDueAt: '2026-10-18T11:20:00+08:00',
+    firstRespondedAt: '2026-10-18T09:55:00+08:00',
+    resolveDueAt: '2026-10-18T17:20:00+08:00',
+    slaStatus: 'breached',
   },
   {
     id: '5e7c1a9d-4b2f-4c8e-9d63-1a8f5b3e7c92',
@@ -105,6 +138,10 @@ export const tickets: Ticket[] = [
     tags: ['物流', '催派'],
     createdAt: '2026-10-25T08:40:00+08:00',
     updatedAt: '2026-10-26T09:15:00+08:00',
+    // medium 优先级：首次响应 +8 小时，催派后已接近时限仍未首响
+    firstResponseDueAt: '2026-10-25T16:40:00+08:00',
+    resolveDueAt: '2026-10-26T08:40:00+08:00',
+    slaStatus: 'at_risk',
   },
   {
     id: '8b3e6d1f-2c9a-4e5b-a7d8-4c1f9b6e2a05',
@@ -119,6 +156,11 @@ export const tickets: Ticket[] = [
     tags: ['退款', '金额差异', '资金核对'],
     createdAt: '2026-10-29T13:05:00+08:00',
     updatedAt: '2026-11-06T10:15:00+08:00',
+    // urgent 优先级：解决时限 +4 小时，等财务复核已逼近时限
+    firstResponseDueAt: '2026-10-29T13:35:00+08:00',
+    firstRespondedAt: '2026-10-29T13:28:00+08:00',
+    resolveDueAt: '2026-10-29T17:05:00+08:00',
+    slaStatus: 'at_risk',
   },
   {
     id: 'c6a2e8b4-1d7f-4b3a-8e59-5d0c3f7a1b86',
@@ -134,5 +176,12 @@ export const tickets: Ticket[] = [
     createdAt: '2026-10-20T11:00:00+08:00',
     updatedAt: '2026-10-22T16:20:00+08:00',
     resolvedAt: '2026-10-22T16:20:00+08:00',
+    // medium 优先级：解决时限 +24 小时，积分补发审批超期
+    firstResponseDueAt: '2026-10-20T19:00:00+08:00',
+    firstRespondedAt: '2026-10-20T11:42:00+08:00',
+    resolveDueAt: '2026-10-21T11:00:00+08:00',
+    slaStatus: 'breached',
+    closedAt: '2026-10-22T16:20:00+08:00',
+    closedReason: '积分已补发，用户确认后结单',
   },
 ]

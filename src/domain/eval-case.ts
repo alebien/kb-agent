@@ -21,6 +21,12 @@ export interface EvalCase {
   dataset?: string
   /** 标签，便于筛选 */
   tags?: string[]
-  /** 最后运行时间，ISO 8601 字符串 */
+  /** 最后运行时间，ISO 8601 带时区字符串 */
   lastRunAt?: string
+  /** 是否已沉淀为 Bad case，由人工确认后置为 true，不随状态自动变化 */
+  isBadCase?: boolean
+  /** 沉淀时间，ISO 8601 带时区字符串，仅 isBadCase 为 true 时有值 */
+  sunkAt?: string
+  /** Bad case 备注，写清错因与改进方向，仅 isBadCase 为 true 时有值 */
+  badCaseNote?: string
 }

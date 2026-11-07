@@ -4,6 +4,8 @@ export interface Citation {
   id: string
   /** 来源文档 id，可跳转到文档详情 */
   documentId?: string
+  /** 来源文档所属知识库 id，对应 KnowledgeBase.id，便于按库统计引用分布 */
+  knowledgeBaseId?: string
   /** 来源文档名称 */
   name: string
   /** 来源补充说明；没有时不传 */

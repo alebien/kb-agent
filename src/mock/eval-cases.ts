@@ -26,6 +26,10 @@ export const evalCases: EvalCase[] = [
     dataset: '退款政策问答集',
     tags: ['退款', '拆封', '品类规则'],
     lastRunAt: '2026-11-03T10:07:00+08:00',
+    // 已沉淀为 Bad case：错把个护类拆封商品判为可无理由退货
+    isBadCase: true,
+    sunkAt: '2026-11-05T09:30:00+08:00',
+    badCaseNote: '未命中个护类拆封限制，需补充品类白名单再判可退性',
   },
   {
     id: 'c58b2d04-9e17-4a63-8f5b-0d2e7c9a1b38',
@@ -83,6 +87,10 @@ export const evalCases: EvalCase[] = [
     dataset: '发票流程问答集',
     tags: ['发票', '换开', '抬头'],
     lastRunAt: '2026-11-02T15:26:00+08:00',
+    // 已沉淀为 Bad case：误答发票不可修改，漏掉换开与红冲路径
+    isBadCase: true,
+    sunkAt: '2026-11-06T14:12:00+08:00',
+    badCaseNote: '漏召回换开规则，应答出30天内换开及跨月红冲路径',
   },
   {
     id: 'a1c97f36-8b24-4e5d-96a0-c3f7b1e2d489',
@@ -196,6 +204,10 @@ export const evalCases: EvalCase[] = [
     dataset: '物流异常问答集',
     tags: ['物流', '丢件', '处理流程'],
     lastRunAt: '2026-11-04T08:56:00+08:00',
+    // 已沉淀为 Bad case：把签收未收到直接推给用户自查，未走丢件理赔流程
+    isBadCase: true,
+    sunkAt: '2026-11-07T10:05:00+08:00',
+    badCaseNote: '缺签收核实与理赔补发流程，应给出48小时处理方案',
   },
   {
     id: '7d3a9f61-c285-4e70-b3d9-05a8c6e1f274',

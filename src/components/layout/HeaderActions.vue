@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
+import { logout as requestLogout } from '@/api/auth'
 
 /** 登录状态 store，控制头像展示与登录弹窗 */
 const authStore = useAuthStore()
@@ -19,6 +20,8 @@ const displayName = computed(
 const avatarText = computed(() =>
   authStore.isLoggedIn ? displayName.value.slice(0, 1).toUpperCase() : '未登录',
 )
+/** 当前账号角色文案，统一从权限模型派生 */
+const roleText = computed(() => authStore.roleLabels.join(' / ') || '普通用户')
 
 /** 未登录时点击头像打开登录弹窗 */
 function openLogin() {
@@ -33,10 +36,11 @@ async function handleAccountCommand(command: string) {
     return
   }
 
+  await requestLogout().catch(() => undefined)
   authStore.logout()
   ElMessage.success('已退出登录')
 
-  if (route.meta.requiresAuth) {
+  if (route.meta.permission) {
     await router.push({ name: 'chat-draft' })
   }
 }
@@ -56,7 +60,12 @@ async function handleAccountCommand(command: string) {
 
       <template #dropdown>
         <el-dropdown-menu>
-          <el-dropdown-item disabled>{{ displayName }}</el-dropdown-item>
+          <el-dropdown-item disabled>
+            <div class="account-summary">
+              <strong>{{ displayName }}</strong>
+              <span>{{ roleText }}</span>
+            </div>
+          </el-dropdown-item>
           <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
         </el-dropdown-menu>
       </template>
@@ -109,5 +118,22 @@ async function handleAccountCommand(command: string) {
 .user-avatar.is-guest {
   --el-avatar-text-size: 11px;
   letter-spacing: -0.02em;
+}
+
+.account-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.4;
+}
+
+.account-summary strong {
+  color: var(--el-text-color-primary);
+  font-size: 13px;
+}
+
+.account-summary span {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
 }
 </style>

@@ -1,5 +1,6 @@
 export * from './auth'
 export * from './conversations'
+export * from './knowledge-bases'
 export * from './documents'
 export * from './eval-cases'
 export * from './tickets'

@@ -1,6 +1,8 @@
 import type { AgentMessage, Conversation, ConversationSummary, Message } from '@/domain'
 import { conversations, defaultConversationId } from '@/mock/conversations'
+import { PERMISSIONS } from '@/auth'
 import { formatDate, toLocalIsoString } from '@/utils/datetime'
+import { assertPermission } from './authorization'
 
 /** 会话详情缓存，key 为会话 id，避免重复构造 mock 数据 */
 const details = new Map<string, Conversation>()
@@ -662,6 +664,8 @@ export async function createConversation(initialMessage?: string): Promise<Creat
 
 /** 删除一个会话，同时清理对应的详情缓存 */
 export async function deleteConversation(id: string): Promise<void> {
+  assertPermission(PERMISSIONS.CHAT_DELETE)
+
   /** 待删除会话在 mock 列表中的下标 */
   const index = conversations.findIndex((conversation) => conversation.id === id)
   if (index === -1) {
@@ -675,6 +679,8 @@ export async function deleteConversation(id: string): Promise<void> {
 
 /** 重命名会话，返回更新后的摘要 */
 export async function renameConversation(id: string, title: string): Promise<ConversationSummary> {
+  assertPermission(PERMISSIONS.CHAT_RENAME)
+
   /** 去除首尾空白后的新标题 */
   const nextTitle = title.trim()
   if (!nextTitle) {

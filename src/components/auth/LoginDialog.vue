@@ -142,7 +142,7 @@ function handleSubmitKeydown(event: KeyboardEvent) {
       <div class="login-dialog__header">
         <div class="login-dialog__mark">K</div>
         <h2>登录 KnoAgent</h2>
-        <p>登录后可管理文档、评测与工单</p>
+        <p>登录后按角色展示文档、评测与工单功能</p>
       </div>
     </template>
 
@@ -203,7 +203,11 @@ function handleSubmitKeydown(event: KeyboardEvent) {
         {{ isSubmitting ? '登录中...' : '登录' }}
       </el-button>
 
-      <p class="login-form__demo">演示账号：admin　密码：123456</p>
+      <div class="login-form__demo">
+        <p>演示账号，密码均为 123456</p>
+        <span>agent 林晓 · knowledge 周岚 · supervisor 陈明</span>
+        <span>admin 系统管理员（知识库 + 主管）</span>
+      </div>
     </el-form>
   </el-dialog>
 </template>
@@ -302,6 +306,15 @@ function handleSubmitKeydown(event: KeyboardEvent) {
   color: var(--el-text-color-placeholder);
   font-size: 12px;
   text-align: center;
+}
+
+.login-form__demo p {
+  margin: 0 0 4px;
+}
+
+.login-form__demo span {
+  display: block;
+  margin-top: 2px;
 }
 
 @media (max-width: 640px) {

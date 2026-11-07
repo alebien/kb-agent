@@ -25,6 +25,12 @@ interface MessageBase {
 export interface UserMessage extends MessageBase {
   /** 消息发送方 */
   role: 'user'
+  /** 意图识别结果，取值为政策、订单、退款、发票、会员、物流、其他之一 */
+  intent?: string
+  /** 意图置信度，0-1 小数，低于 0.6 时先追问澄清再检索 */
+  intentConfidence?: number
+  /** 是否已就低置信度意图追问过澄清，用于限制澄清轮次 */
+  clarificationAsked?: boolean
 }
 
 /** 助手消息 */
@@ -35,6 +41,8 @@ export interface AgentMessage extends MessageBase {
   citations: Citation[]
   /** 本次回答触发的工具调用 */
   toolCalls: ToolCall[]
+  /** 本次回答的回答置信度，0-100 整数，会话层的 confidence 取最近一条助手消息的值 */
+  confidence?: number
   /** 失败时的错误说明 */
   error?: string
   /** 生成该消息所用的模型名称 */

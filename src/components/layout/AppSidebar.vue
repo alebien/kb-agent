@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { deleteConversation, renameConversation } from '@/api/conversations'
+import { PERMISSIONS, type PermissionCode } from '@/auth'
 import { useAuthStore } from '@/stores/auth'
 import { useConversationStore } from '@/stores/conversations'
 import { debounce } from '@/utils/debounce'
@@ -41,26 +42,39 @@ let animationTimer: ReturnType<typeof setTimeout> | undefined
 /** 断点切换时置为 true，用于跳过下一次滑出动画 */
 let skipNextAnimation = false
 
-/** 登录后展示的主菜单配置 */
-const mainMenus = [
+/** 主菜单配置，每个菜单声明访问所需权限 */
+const mainMenus: {
+  /** 菜单文案 */
+  label: string
+  /** 点击后跳转的路由 */
+  path: string
+  /** 菜单图标的 SVG path */
+  icon: string
+  /** 菜单要求的权限码 */
+  permission: PermissionCode
+}[] = [
   {
-    /** 菜单文案 */
     label: '文档',
-    /** 点击后跳转的路由 */
     path: '/documents',
-    /** 菜单图标的 SVG path */
     icon: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6',
+    permission: PERMISSIONS.DOCUMENT_VIEW,
   },
-  { label: '评测中心', path: '/evaluation', icon: 'M18 20V10M12 20V4M6 20v-6' },
+  {
+    label: '评测中心',
+    path: '/evaluation',
+    icon: 'M18 20V10M12 20V4M6 20v-6',
+    permission: PERMISSIONS.EVALUATION_VIEW,
+  },
   {
     label: '工单',
     path: '/tickets',
     icon: 'M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z',
+    permission: PERMISSIONS.TICKET_VIEW,
   },
 ]
 
-/** 当前用户可见的主菜单，未登录时为空 */
-const visibleMenus = computed(() => (authStore.isLoggedIn ? mainMenus : []))
+/** 当前用户可见的主菜单，按权限码逐项过滤 */
+const visibleMenus = computed(() => mainMenus.filter((item) => authStore.can(item.permission)))
 /** 当前高亮的菜单项，草稿页高亮「新对话」 */
 const activeMenu = computed(() => {
   if (route.name === 'chat-draft') {
@@ -74,9 +88,12 @@ const activeConversationId = computed(() => {
   const id = route.params.conversationId
   return typeof id === 'string' ? id : ''
 })
-/** 最近对话的更多操作，登录后才展示重命名 */
+/** 最近对话的更多操作，重命名与删除分别按权限展示 */
 const conversationActions = computed(() =>
-  createConversationMenuActions({ canRename: authStore.isLoggedIn }),
+  createConversationMenuActions({
+    canRename: authStore.can(PERMISSIONS.CHAT_RENAME),
+    canDelete: authStore.can(PERMISSIONS.CHAT_DELETE),
+  }),
 )
 /** 侧边栏折叠按钮的图标路径，根据折叠状态切换方向 */
 const toggleIcon = computed(() => {
@@ -170,9 +187,9 @@ async function handleConversationAction(
   await deleteConversationItem(conversation)
 }
 
-/** 重命名会话，仅登录用户可见并可执行 */
+/** 重命名会话，执行前再次校验权限 */
 async function renameConversationItem(conversation: ConversationSummary) {
-  if (!authStore.isLoggedIn) {
+  if (!authStore.can(PERMISSIONS.CHAT_RENAME)) {
     return
   }
 
@@ -215,6 +232,10 @@ async function renameConversationItem(conversation: ConversationSummary) {
 
 /** 删除会话，删除当前打开会话后回到新对话页 */
 async function deleteConversationItem(conversation: ConversationSummary) {
+  if (!authStore.can(PERMISSIONS.CHAT_DELETE)) {
+    return
+  }
+
   try {
     await ElMessageBox.confirm(
       `删除「${conversation.title}」后无法恢复，确定继续吗？`,
