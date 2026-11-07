@@ -1,7 +1,5 @@
 import type { Document } from '@/domain'
 import { documents } from '@/mock'
-import { PERMISSIONS } from '@/auth'
-import { assertPermission } from './authorization'
 
 /** 模拟网络延迟，统一返回传入的值 */
 function delay<T>(value: T, milliseconds = 260): Promise<T> {
@@ -15,8 +13,6 @@ function delay<T>(value: T, milliseconds = 260): Promise<T> {
  * 默认过滤掉已软删除（deletedAt 有值）的文档，传 includeDeleted 为 true 时返回全部
  */
 export async function fetchDocuments(includeDeleted = false): Promise<Document[]> {
-  assertPermission(PERMISSIONS.DOCUMENT_VIEW)
-
   /** 需要展示的文档，默认排除软删除项，供文档库列表使用 */
   const visible = includeDeleted
     ? documents

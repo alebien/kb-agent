@@ -6,6 +6,10 @@ export interface ConversationSummary {
   id: string
   /** 会话标题，通常取首条提问截断后的文本 */
   title: string
+  /** 创建人用户 id，会话列表与详情都按它做数据隔离，创建后不可修改 */
+  createdBy: string
+  /** 会话创建时间，ISO 8601 带时区字符串，创建后不再变化 */
+  createdAt: string
   /** 最后更新时间，ISO 8601 带时区字符串，展示时由 utils 格式化为 `YYYY-MM-DD HH:mm` */
   updatedAt: string
 }
@@ -23,8 +27,8 @@ export interface Conversation {
   confidence: number | null
   /** 意图识别置信度，0-1 的小数，与回答置信度不是同一指标；低于 0.6 时先追问澄清再检索 */
   intentConfidence?: number
-  /** 关联工单号，没有时为 `null` */
-  ticket: string | null
+  /** 关联工单号，没有时为 `null`；复用已有工单时即为原单号 */
+  ticketCode: string | null
   /** 链路追踪标识 */
   traceId: string
   /**

@@ -1,4 +1,3 @@
-import type { PermissionCode } from '@/auth'
 import 'vue-router'
 
 declare module 'vue-router' {
@@ -9,7 +8,7 @@ declare module 'vue-router' {
     pageTitle?: string
     /** 标题右侧状态标签 */
     status?: string
-    /** 访问页面所需的权限码，未配置表示访客也可访问 */
-    permission?: PermissionCode | PermissionCode[]
+    /** 访问页面是否需要登录，MVP 只给对话页开启 */
+    requiresAuth?: boolean
   }
 }

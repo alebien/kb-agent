@@ -14,6 +14,7 @@ import ChatComposer from '@/components/chat/ChatComposer.vue'
 import ChatEmptyState from '@/components/chat/ChatEmptyState.vue'
 import ChatMessageList from '@/components/chat/ChatMessageList.vue'
 import type { AgentMessage, Conversation, UserMessage } from '@/domain'
+import { useAuthStore } from '@/stores/auth'
 import { useConversationStore } from '@/stores/conversations'
 
 /** 当前路由信息，用于区分草稿页与会话页 */
@@ -22,6 +23,8 @@ const route = useRoute()
 const router = useRouter()
 /** 会话列表 store，新建会话后同步侧边栏 */
 const conversationStore = useConversationStore()
+/** 登录状态 store，游客提交提问时先弹出登录框 */
+const authStore = useAuthStore()
 
 /** 会话详情是否正在加载 */
 const isLoading = ref(true)
@@ -96,7 +99,7 @@ async function loadConversation(id: string) {
     }
 
     currentDetail.value = null
-    loadError.value = '会话不存在或已被删除'
+    loadError.value = '会话不存在或无权访问，请从左侧选择自己的会话'
   } finally {
     if (requestId === loadRequestId) {
       isLoading.value = false
@@ -176,6 +179,13 @@ async function handleSubmit(content: string) {
   /** 去除首尾空白后的提问内容 */
   const message = content.trim()
   if (!message) {
+    return
+  }
+
+  // 草稿页对游客开放，提交动作才要求登录，登录成功后保留输入内容
+  if (!authStore.isLoggedIn) {
+    authStore.openLoginDialog()
+    ElMessage.info('登录后即可发送消息')
     return
   }
 

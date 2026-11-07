@@ -43,6 +43,8 @@ export interface AgentMessage extends MessageBase {
   toolCalls: ToolCall[]
   /** 本次回答的回答置信度，0-100 整数，会话层的 confidence 取最近一条助手消息的值 */
   confidence?: number
+  /** 本条回答的总耗时，单位毫秒，展示时经 formatDuration 格式化 */
+  durationMs?: number
   /** 失败时的错误说明 */
   error?: string
   /** 生成该消息所用的模型名称 */

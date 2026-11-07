@@ -20,8 +20,8 @@ const displayName = computed(
 const avatarText = computed(() =>
   authStore.isLoggedIn ? displayName.value.slice(0, 1).toUpperCase() : '未登录',
 )
-/** 当前账号角色文案，统一从权限模型派生 */
-const roleText = computed(() => authStore.roleLabels.join(' / ') || '普通用户')
+/** 当前账号身份文案，MVP 只有一个客服角色，固定展示「客服」 */
+const roleText = '客服'
 
 /** 未登录时点击头像打开登录弹窗 */
 function openLogin() {
@@ -40,7 +40,7 @@ async function handleAccountCommand(command: string) {
   authStore.logout()
   ElMessage.success('已退出登录')
 
-  if (route.meta.permission) {
+  if (route.meta.requiresAuth) {
     await router.push({ name: 'chat-draft' })
   }
 }

@@ -2,8 +2,11 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { deleteConversation, renameConversation } from '@/api/conversations'
-import { PERMISSIONS, type PermissionCode } from '@/auth'
+import {
+  ConversationForbiddenError,
+  deleteConversation,
+  renameConversation,
+} from '@/api/conversations'
 import { useAuthStore } from '@/stores/auth'
 import { useConversationStore } from '@/stores/conversations'
 import { debounce } from '@/utils/debounce'
@@ -29,7 +32,7 @@ const emit = defineEmits<{
 const route = useRoute()
 /** 路由实例，用于菜单跳转 */
 const router = useRouter()
-/** 登录状态 store，控制菜单可见性 */
+/** 登录状态 store，账号变化时重新拉取会话列表，避免跨账号缓存 */
 const authStore = useAuthStore()
 /** 会话列表 store，提供最近对话数据 */
 const conversationStore = useConversationStore()
@@ -42,39 +45,6 @@ let animationTimer: ReturnType<typeof setTimeout> | undefined
 /** 断点切换时置为 true，用于跳过下一次滑出动画 */
 let skipNextAnimation = false
 
-/** 主菜单配置，每个菜单声明访问所需权限 */
-const mainMenus: {
-  /** 菜单文案 */
-  label: string
-  /** 点击后跳转的路由 */
-  path: string
-  /** 菜单图标的 SVG path */
-  icon: string
-  /** 菜单要求的权限码 */
-  permission: PermissionCode
-}[] = [
-  {
-    label: '文档',
-    path: '/documents',
-    icon: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6',
-    permission: PERMISSIONS.DOCUMENT_VIEW,
-  },
-  {
-    label: '评测中心',
-    path: '/evaluation',
-    icon: 'M18 20V10M12 20V4M6 20v-6',
-    permission: PERMISSIONS.EVALUATION_VIEW,
-  },
-  {
-    label: '工单',
-    path: '/tickets',
-    icon: 'M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z',
-    permission: PERMISSIONS.TICKET_VIEW,
-  },
-]
-
-/** 当前用户可见的主菜单，按权限码逐项过滤 */
-const visibleMenus = computed(() => mainMenus.filter((item) => authStore.can(item.permission)))
 /** 当前高亮的菜单项，草稿页高亮「新对话」 */
 const activeMenu = computed(() => {
   if (route.name === 'chat-draft') {
@@ -88,12 +58,9 @@ const activeConversationId = computed(() => {
   const id = route.params.conversationId
   return typeof id === 'string' ? id : ''
 })
-/** 最近对话的更多操作，重命名与删除分别按权限展示 */
+/** 最近对话的更多操作，MVP 单角色下重命名与删除均对会话创建人开放 */
 const conversationActions = computed(() =>
-  createConversationMenuActions({
-    canRename: authStore.can(PERMISSIONS.CHAT_RENAME),
-    canDelete: authStore.can(PERMISSIONS.CHAT_DELETE),
-  }),
+  createConversationMenuActions({ canRename: true, canDelete: true }),
 )
 /** 侧边栏折叠按钮的图标路径，根据折叠状态切换方向 */
 const toggleIcon = computed(() => {
@@ -174,6 +141,11 @@ async function selectConversation(conversation: ConversationSummary) {
   await router.push(`/chat/${conversation.id}`)
 }
 
+/** 把接口异常转换成可展示文案，归属失败统一提示会话不存在或无权访问 */
+function getActionErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof ConversationForbiddenError ? error.message : fallback
+}
+
 /** 执行最近对话的操作，新增操作时在这里扩展分支 */
 async function handleConversationAction(
   action: ConversationActionKey,
@@ -187,12 +159,8 @@ async function handleConversationAction(
   await deleteConversationItem(conversation)
 }
 
-/** 重命名会话，执行前再次校验权限 */
+/** 重命名会话，接口层会再次校验会话归属 */
 async function renameConversationItem(conversation: ConversationSummary) {
-  if (!authStore.can(PERMISSIONS.CHAT_RENAME)) {
-    return
-  }
-
   /** ElMessageBox 返回的新名称 */
   let nextTitle: string
 
@@ -225,17 +193,13 @@ async function renameConversationItem(conversation: ConversationSummary) {
     const summary = await renameConversation(conversation.id, nextTitle)
     conversationStore.updateTitle(summary.id, summary.title)
     ElMessage.success('已重命名')
-  } catch {
-    ElMessage.error('重命名失败，请稍后重试')
+  } catch (error) {
+    ElMessage.error(getActionErrorMessage(error, '重命名失败，请稍后重试'))
   }
 }
 
 /** 删除会话，删除当前打开会话后回到新对话页 */
 async function deleteConversationItem(conversation: ConversationSummary) {
-  if (!authStore.can(PERMISSIONS.CHAT_DELETE)) {
-    return
-  }
-
   try {
     await ElMessageBox.confirm(
       `删除「${conversation.title}」后无法恢复，确定继续吗？`,
@@ -260,8 +224,8 @@ async function deleteConversationItem(conversation: ConversationSummary) {
     }
 
     ElMessage.success('已删除对话')
-  } catch {
-    ElMessage.error('删除对话失败，请稍后重试')
+  } catch (error) {
+    ElMessage.error(getActionErrorMessage(error, '删除对话失败，请稍后重试'))
   }
 }
 
@@ -291,6 +255,17 @@ onMounted(() => {
   window.addEventListener('resize', handleViewportChange)
   void conversationStore.load()
 })
+
+// 登录、退出或切换到另一个账号后，会话列表必须按新的登录人重新过滤
+watch(
+  () => authStore.user?.id ?? '',
+  () => {
+    conversationStore.reset()
+    if (authStore.isLoggedIn) {
+      void conversationStore.load()
+    }
+  },
+)
 
 onBeforeUnmount(() => {
   if (animationTimer !== undefined) {
@@ -337,17 +312,6 @@ onBeforeUnmount(() => {
 
     <el-scrollbar class="aside-scroll">
       <el-menu :default-active="activeMenu" class="aside-menu" @select="handleMenuSelect">
-        <el-menu-item
-          v-for="item in visibleMenus"
-          :key="item.path"
-          :index="item.path"
-          :title="collapsed && !isMobile ? item.label : undefined"
-        >
-          <svg class="menu-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path :d="item.icon" />
-          </svg>
-          <span class="menu-label">{{ item.label }}</span>
-        </el-menu-item>
         <el-menu-item index="new-chat" :title="collapsed && !isMobile ? '新对话' : undefined">
           <svg class="menu-icon" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 5v14M5 12h14" />
@@ -356,17 +320,19 @@ onBeforeUnmount(() => {
         </el-menu-item>
       </el-menu>
 
-      <el-divider class="aside-divider" />
-      <p class="aside-section-title">最近对话</p>
+      <template v-if="authStore.isLoggedIn">
+        <el-divider class="aside-divider" />
+        <p class="aside-section-title">最近对话</p>
 
-      <ConversationList
-        class="recent-conversations"
-        :items="conversationStore.list"
-        :active-id="activeConversationId"
-        :actions="conversationActions"
-        @select="selectConversation"
-        @action="handleConversationAction"
-      />
+        <ConversationList
+          class="recent-conversations"
+          :items="conversationStore.list"
+          :active-id="activeConversationId"
+          :actions="conversationActions"
+          @select="selectConversation"
+          @action="handleConversationAction"
+        />
+      </template>
     </el-scrollbar>
   </el-aside>
 </template>

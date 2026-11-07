@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { PERMISSIONS } from '@/auth'
-import { checkRoutePermission } from '@/auth/guard'
+import { checkRouteAuth } from '@/auth/guard'
 
 /** 会话 id 的 UUID v4 校验规则，不符合时回退到新对话页 */
 const conversationIdPattern =
@@ -23,6 +22,8 @@ const router = createRouter({
             title: '新对话',
             pageTitle: '企业知识库 Agent',
             status: '运行中',
+            // 草稿页对游客开放，提交提问时再由页面弹出登录框
+            requiresAuth: false,
           },
         },
         {
@@ -33,6 +34,7 @@ const router = createRouter({
             title: '对话',
             pageTitle: '企业知识库 Agent',
             status: '运行中',
+            requiresAuth: true,
           },
         },
         {
@@ -42,7 +44,6 @@ const router = createRouter({
           meta: {
             title: '文档',
             pageTitle: '知识文档',
-            permission: PERMISSIONS.DOCUMENT_VIEW,
           },
         },
         {
@@ -52,7 +53,6 @@ const router = createRouter({
           meta: {
             title: '评测中心',
             pageTitle: '评测中心',
-            permission: PERMISSIONS.EVALUATION_VIEW,
           },
         },
         {
@@ -62,7 +62,6 @@ const router = createRouter({
           meta: {
             title: '工单',
             pageTitle: '工单管理',
-            permission: PERMISSIONS.TICKET_VIEW,
           },
         },
         {
@@ -93,24 +92,24 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
-  /** 当前路由要求的权限，未配置表示访客可访问 */
-  const permission = to.meta.permission
-
-  /** 权限校验结果，true 表示放行 */
-  const permissionResult = checkRoutePermission(permission, to.fullPath)
-  if (permissionResult !== true) {
-    return permissionResult
+  // 先校验会话 id 格式：非法 id 直接回草稿页，不打扰游客登录
+  if (to.name === 'chat') {
+    /** 当前路由中的会话 id */
+    const conversationId = to.params.conversationId
+    if (typeof conversationId !== 'string' || !conversationIdPattern.test(conversationId)) {
+      return '/chat/new'
+    }
   }
 
-  if (to.name !== 'chat') {
+  /** 当前路由是否需要登录，MVP 只有真实会话页需要 */
+  const requiresAuth = to.meta.requiresAuth === true
+  if (!requiresAuth) {
     return true
   }
 
-  /** 当前路由中的会话 id */
-  const conversationId = to.params.conversationId
-  return typeof conversationId === 'string' && conversationIdPattern.test(conversationId)
-    ? true
-    : '/chat/new'
+  /** 登录态校验结果，true 表示放行 */
+  const authResult = checkRouteAuth(to.fullPath)
+  return authResult === true ? true : authResult
 })
 
 router.afterEach((to) => {

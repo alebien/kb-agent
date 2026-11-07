@@ -1,8 +1,48 @@
-import type { AgentMessage, Conversation, ConversationSummary, Message } from '@/domain'
+﻿import type { AgentMessage, Conversation, ConversationSummary, Message } from '@/domain'
 import { conversations, defaultConversationId } from '@/mock/conversations'
-import { PERMISSIONS } from '@/auth'
 import { formatDate, toLocalIsoString } from '@/utils/datetime'
-import { assertPermission } from './authorization'
+import { useAuthStore } from '@/stores/auth'
+
+/** 会话不存在或不属于当前登录人时抛出的错误码，前端统一映射为同一句提示 */
+export const CONVERSATION_FORBIDDEN_CODE = 'FORBIDDEN_CONVERSATION'
+
+/**
+ * 会话归属校验失败
+ * MVP 的全部五个会话入口统一走这里，避免各处手写 createdBy 比较
+ */
+export class ConversationForbiddenError extends Error {
+  /** 与接口约定一致的错误码，便于前端按 code 映射文案 */
+  readonly code = CONVERSATION_FORBIDDEN_CODE
+
+  constructor() {
+    super('会话不存在或无权访问')
+    this.name = 'ConversationForbiddenError'
+  }
+}
+
+/** 当前登录人 id，未登录时返回空字符串，所有会话操作都会被拒绝 */
+function currentUserId(): string {
+  return useAuthStore().user?.id ?? ''
+}
+
+/** 校验会话是否属于当前登录人，缺失 createdBy 的历史数据归当前登录人 */
+function assertConversationOwner(summary: ConversationSummary): void {
+  /** 当前登录人 id */
+  const userId = currentUserId()
+  if (!userId) {
+    throw new ConversationForbiddenError()
+  }
+
+  // 历史数据没有 createdBy 时先补写成当前登录人，之后仍按严格归属判断
+  if (!summary.createdBy) {
+    summary.createdBy = userId
+    return
+  }
+
+  if (summary.createdBy !== userId) {
+    throw new ConversationForbiddenError()
+  }
+}
 
 /** 会话详情缓存，key 为会话 id，避免重复构造 mock 数据 */
 const details = new Map<string, Conversation>()
@@ -101,12 +141,23 @@ function splitAnswer(content: string): string[] {
   return chunks
 }
 
-/** 按会话 id 获取缓存详情，不存在时抛出错误 */
+/**
+ * 按会话 id 获取缓存详情，作为发消息、停止、删除消息与重试的统一入口
+ * 先校验归属，再取缓存，缺失时按无权访问处理，不暴露会话是否存在
+ */
 function requireDetail(id: string): Conversation {
+  /** 会话摘要在 mock 列表中的记录，用于归属校验 */
+  const summary = conversations.find((conversation) => conversation.id === id)
+  if (!summary) {
+    throw new ConversationForbiddenError()
+  }
+
+  assertConversationOwner(summary)
+
   /** 当前会话详情 */
   const conversation = details.get(id)
   if (!conversation) {
-    throw new Error(`Conversation ${id} not found`)
+    throw new ConversationForbiddenError()
   }
 
   return conversation
@@ -132,8 +183,10 @@ function detail(id: string): Conversation {
   /** 在预置列表中查找对应的会话摘要 */
   const summary = conversations.find((conversation) => conversation.id === id)
   if (!summary) {
-    throw new Error(`Conversation ${id} not found`)
+    throw new ConversationForbiddenError()
   }
+
+  assertConversationOwner(summary)
 
   if (details.has(id)) {
     return details.get(id)!
@@ -149,7 +202,7 @@ function detail(id: string): Conversation {
     confidence: 92,
     // 意图识别置信度，mock 里固定给一个高于 0.6 阈值的值
     intentConfidence: 0.93,
-    ticket: '#T-2048',
+    ticketCode: 'A1024',
     traceId: summary.id.slice(0, 6),
     messages: [
       {
@@ -229,11 +282,38 @@ function detail(id: string): Conversation {
 
 /** 获取会话摘要列表，返回浅拷贝避免调用方直接修改 mock 数据 */
 export async function fetchConversationList(): Promise<ConversationSummary[]> {
-  return delay(conversations.map((conversation) => ({ ...conversation })))
+  /** 当前登录人 id，列表只返回本人创建的会话 */
+  const userId = currentUserId()
+  if (!userId) {
+    return delay([])
+  }
+
+  // 历史数据缺少 createdBy 时归当前登录人，避免老数据在列表里消失
+  for (const conversation of conversations) {
+    if (!conversation.createdBy) {
+      conversation.createdBy = userId
+    }
+  }
+
+  /** 归属当前登录人的会话摘要，最多返回 50 条 */
+  const list = conversations
+    .filter((conversation) => conversation.createdBy === userId)
+    .slice(0, 50)
+    .map((conversation) => ({ ...conversation }))
+
+  return delay(list)
 }
 
 /** 获取会话详情，已缓存时直接返回，否则延迟模拟请求 */
 export async function fetchConversationDetail(id: string): Promise<Conversation> {
+  /** 当前会话摘要，用于请求前的归属校验 */
+  const summary = conversations.find((conversation) => conversation.id === id)
+  if (!summary) {
+    throw new ConversationForbiddenError()
+  }
+
+  assertConversationOwner(summary)
+
   /** 命中的缓存详情 */
   const cached = details.get(id)
   if (cached) {
@@ -337,7 +417,7 @@ export async function sendMessage(
     role: 'user',
     content: prompt,
     status: 'completed',
-    createdAt: now.toISOString(),
+    createdAt: toLocalIsoString(now),
   }
 
   /** 正在流式生成的助手消息 */
@@ -347,8 +427,8 @@ export async function sendMessage(
     role: 'agent',
     content: '',
     status: 'streaming',
-    createdAt: now.toISOString(),
-    startedAt: now.toISOString(),
+    createdAt: toLocalIsoString(now),
+    startedAt: toLocalIsoString(now),
     replyToMessageId: userMessageId,
     citations: [],
     toolCalls: [],
@@ -377,7 +457,7 @@ export async function sendMessage(
     for (const chunk of chunks) {
       if (controller.signal.aborted) {
         answer.status = 'stopped'
-        answer.completedAt = new Date().toISOString()
+        answer.completedAt = toLocalIsoString(new Date())
         touchConversation(conversation, 'completed')
         notifyConversationUpdate(conversation, handlers)
         handlers.onStopped(answer)
@@ -389,7 +469,7 @@ export async function sendMessage(
       // 停止可能发生在等待期间，此时不再追加新片段
       if (controller.signal.aborted) {
         answer.status = 'stopped'
-        answer.completedAt = new Date().toISOString()
+        answer.completedAt = toLocalIsoString(new Date())
         touchConversation(conversation, 'completed')
         notifyConversationUpdate(conversation, handlers)
         handlers.onStopped(answer)
@@ -401,7 +481,7 @@ export async function sendMessage(
     }
 
     answer.status = 'completed'
-    answer.completedAt = new Date().toISOString()
+    answer.completedAt = toLocalIsoString(new Date())
     answer.citations = [
       {
         id: `${answerId}-citation`,
@@ -433,7 +513,7 @@ export async function sendMessage(
   } catch (error) {
     answer.status = 'failed'
     answer.error = error instanceof Error ? error.message : '生成失败'
-    answer.completedAt = new Date().toISOString()
+    answer.completedAt = toLocalIsoString(new Date())
     touchConversation(conversation, 'failed')
     notifyConversationUpdate(conversation, handlers)
     handlers.onError(answer)
@@ -459,7 +539,7 @@ export async function stopMessage(id: string, answerId: string): Promise<void> {
   const answer = conversation.messages.find((message) => message.id === answerId)
   if (answer?.role === 'agent') {
     answer.status = 'stopped'
-    answer.completedAt = new Date().toISOString()
+    answer.completedAt = toLocalIsoString(new Date())
   }
   touchConversation(conversation, 'completed')
 }
@@ -510,7 +590,7 @@ export async function regenerateMessage(
   answer.error = undefined
   answer.citations = []
   answer.toolCalls = []
-  answer.startedAt = new Date().toISOString()
+  answer.startedAt = toLocalIsoString(new Date())
   touchConversation(conversation, 'processing')
   notifyConversationUpdate(conversation, handlers)
 
@@ -528,7 +608,7 @@ export async function regenerateMessage(
     for (const chunk of chunks) {
       if (controller.signal.aborted) {
         answer.status = 'stopped'
-        answer.completedAt = new Date().toISOString()
+        answer.completedAt = toLocalIsoString(new Date())
         touchConversation(conversation, 'completed')
         notifyConversationUpdate(conversation, handlers)
         handlers.onStopped(answer)
@@ -539,7 +619,7 @@ export async function regenerateMessage(
       // 停止可能发生在等待期间，此时不再追加新片段
       if (controller.signal.aborted) {
         answer.status = 'stopped'
-        answer.completedAt = new Date().toISOString()
+        answer.completedAt = toLocalIsoString(new Date())
         touchConversation(conversation, 'completed')
         notifyConversationUpdate(conversation, handlers)
         handlers.onStopped(answer)
@@ -551,7 +631,7 @@ export async function regenerateMessage(
     }
 
     answer.status = 'completed'
-    answer.completedAt = new Date().toISOString()
+    answer.completedAt = toLocalIsoString(new Date())
     answer.citations = [
       {
         id: `${answerId}-citation`,
@@ -581,7 +661,7 @@ export async function regenerateMessage(
   } catch (error) {
     answer.status = 'failed'
     answer.error = error instanceof Error ? error.message : '生成失败'
-    answer.completedAt = new Date().toISOString()
+    answer.completedAt = toLocalIsoString(new Date())
     touchConversation(conversation, 'failed')
     notifyConversationUpdate(conversation, handlers)
     handlers.onError(answer)
@@ -600,6 +680,12 @@ export interface CreatedConversation {
 
 /** 创建新会话，生成 UUID 并写入 mock 数据 */
 export async function createConversation(initialMessage?: string): Promise<CreatedConversation> {
+  /** 当前登录人 id，建会话时写入 createdBy 并作为后续归属判定依据 */
+  const createdBy = currentUserId()
+  if (!createdBy) {
+    throw new ConversationForbiddenError()
+  }
+
   /** 浏览器生成的会话唯一标识 */
   const uuid = window.crypto.randomUUID()
   /** 去除首尾空白后的首条提问 */
@@ -618,11 +704,13 @@ export async function createConversation(initialMessage?: string): Promise<Creat
         ? `${titleSource.slice(0, 24)}…`
         : titleSource
       : '新对话',
+    createdBy,
+    createdAt,
     updatedAt: createdAt,
   }
 
-  /** mock 消息使用的 ISO 时间 */
-  const messageCreatedAt = now.toISOString()
+  /** mock 消息使用的 ISO 时间，与摘要共用同一带时区格式 */
+  const messageCreatedAt = createdAt
 
   /** 新会话只写入用户提问，助手回答由发送接口按流式过程追加 */
   const messages: Conversation['messages'] = prompt
@@ -643,7 +731,7 @@ export async function createConversation(initialMessage?: string): Promise<Creat
     summary,
     status: prompt ? 'processing' : 'idle',
     confidence: null,
-    ticket: null,
+    ticketCode: null,
     traceId: 'draft',
     messages,
     stats: {
@@ -664,13 +752,14 @@ export async function createConversation(initialMessage?: string): Promise<Creat
 
 /** 删除一个会话，同时清理对应的详情缓存 */
 export async function deleteConversation(id: string): Promise<void> {
-  assertPermission(PERMISSIONS.CHAT_DELETE)
-
   /** 待删除会话在 mock 列表中的下标 */
   const index = conversations.findIndex((conversation) => conversation.id === id)
   if (index === -1) {
-    throw new Error(`Conversation ${id} not found`)
+    throw new ConversationForbiddenError()
   }
+
+  const summary = conversations[index]!
+  assertConversationOwner(summary)
 
   await delay(undefined, 180)
   conversations.splice(index, 1)
@@ -679,8 +768,6 @@ export async function deleteConversation(id: string): Promise<void> {
 
 /** 重命名会话，返回更新后的摘要 */
 export async function renameConversation(id: string, title: string): Promise<ConversationSummary> {
-  assertPermission(PERMISSIONS.CHAT_RENAME)
-
   /** 去除首尾空白后的新标题 */
   const nextTitle = title.trim()
   if (!nextTitle) {
@@ -690,8 +777,10 @@ export async function renameConversation(id: string, title: string): Promise<Con
   /** 待重命名的会话摘要 */
   const summary = conversations.find((conversation) => conversation.id === id)
   if (!summary) {
-    throw new Error(`Conversation ${id} not found`)
+    throw new ConversationForbiddenError()
   }
+
+  assertConversationOwner(summary)
 
   await delay(undefined, 180)
   summary.title = nextTitle

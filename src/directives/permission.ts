@@ -1,34 +1,27 @@
-import type { App, Directive, DirectiveBinding } from 'vue'
+﻿import type { App, Directive, DirectiveBinding } from 'vue'
 import type { PermissionCode } from '@/auth'
-import { useAuthStore } from '@/stores/auth'
 
-/** 权限指令绑定的值，支持单个权限或多个权限同时满足 */
+/**
+ * 权限指令绑定的值，支持单个权限码或多个权限码
+ * MVP 单角色下不再参与展示判定，只保留类型签名供后续后台模块恢复
+ */
 type PermissionBindingValue = PermissionCode | PermissionCode[]
 
-/** 记录元素原始显示方式，权限恢复时按原值还原 */
-const originalDisplay = new WeakMap<HTMLElement, string>()
-
-/** 根据当前权限快照显示或隐藏元素，不做整块 DOM 删除 */
-function applyPermission(el: HTMLElement, binding: DirectiveBinding<PermissionBindingValue>) {
-  /** 当前登录用户的权限快照 */
-  const authStore = useAuthStore()
-  /** 是否拥有指令要求的权限 */
-  const allowed = authStore.can(binding.value)
-
-  if (!originalDisplay.has(el)) {
-    originalDisplay.set(el, el.style.display)
-  }
-
-  el.style.display = allowed ? (originalDisplay.get(el) ?? '') : 'none'
-}
-
-/** v-permission 指令，按钮级权限控制入口 */
+/**
+ * v-permission 指令
+ * 当前产品只有一个客服角色，指令不隐藏任何元素；
+ * 多角色与工单后台恢复时，再把权限快照判断接回 mounted 与 updated
+ */
 export const permissionDirective: Directive<HTMLElement, PermissionBindingValue> = {
-  mounted: applyPermission,
-  updated: applyPermission,
+  mounted(_el: HTMLElement, _binding: DirectiveBinding<PermissionBindingValue>) {
+    // MVP 不按权限码隐藏元素
+  },
+  updated(_el: HTMLElement, _binding: DirectiveBinding<PermissionBindingValue>) {
+    // MVP 不按权限码隐藏元素
+  },
 }
 
-/** 注册全局权限指令 */
+/** 注册全局权限指令，保留调用点避免后续恢复时改 main.ts */
 export function setupPermissionDirective(app: App) {
   app.directive('permission', permissionDirective)
 }

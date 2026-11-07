@@ -104,7 +104,8 @@ async function submitLogin() {
     ElMessage.success(`欢迎回来，${result.user.name}`)
 
     if (redirect) {
-      await router.push(redirect)
+      // 回跳只生效一次，路由参数里不带 redirect，刷新后不再恢复
+      await router.replace(redirect)
     }
   } catch (error) {
     /** 接口返回的错误信息，未知错误使用兜底文案 */
@@ -142,7 +143,7 @@ function handleSubmitKeydown(event: KeyboardEvent) {
       <div class="login-dialog__header">
         <div class="login-dialog__mark">K</div>
         <h2>登录 KnoAgent</h2>
-        <p>登录后按角色展示文档、评测与工单功能</p>
+        <p>登录后只查看和管理你自己的对话</p>
       </div>
     </template>
 
@@ -205,8 +206,8 @@ function handleSubmitKeydown(event: KeyboardEvent) {
 
       <div class="login-form__demo">
         <p>演示账号，密码均为 123456</p>
-        <span>agent 林晓 · knowledge 周岚 · supervisor 陈明</span>
-        <span>admin 系统管理员（知识库 + 主管）</span>
+        <span>agent 林晓 · agent2 周岚</span>
+        <span>两个账号数据互相隔离，可用于验证会话隔离</span>
       </div>
     </el-form>
   </el-dialog>
