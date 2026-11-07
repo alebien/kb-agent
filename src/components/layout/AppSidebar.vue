@@ -11,7 +11,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useConversationStore } from '@/stores/conversations'
 import { debounce } from '@/utils/debounce'
 import ConversationList from './ConversationList.vue'
-import { createConversationMenuActions, type ConversationActionKey } from './conversationMenu'
+import { CONVERSATION_MENU_ACTIONS, type ConversationActionKey } from './conversationMenu'
 import type { ConversationSummary } from '@/domain'
 
 /** 侧边栏的受控状态 */
@@ -59,9 +59,7 @@ const activeConversationId = computed(() => {
   return typeof id === 'string' ? id : ''
 })
 /** 最近对话的更多操作，MVP 单角色下重命名与删除均对会话创建人开放 */
-const conversationActions = computed(() =>
-  createConversationMenuActions({ canRename: true, canDelete: true }),
-)
+const conversationActions = CONVERSATION_MENU_ACTIONS
 /** 侧边栏折叠按钮的图标路径，根据折叠状态切换方向 */
 const toggleIcon = computed(() => {
   /** 是否处于可展开状态 */
@@ -133,6 +131,17 @@ async function handleMenuSelect(index: string) {
   }
 
   await router.push(index)
+}
+
+/** 重新拉取最近对话，供列表错误态的重试按钮调用 */
+function retryLoadConversations() {
+  void conversationStore.load(true)
+}
+
+/** 空态快捷新建对话，复用菜单跳转逻辑 */
+async function createNewChat() {
+  close()
+  await router.push({ name: 'chat-draft' })
 }
 
 /** 打开最近对话并收起移动端侧边栏 */
@@ -329,8 +338,12 @@ onBeforeUnmount(() => {
           :items="conversationStore.list"
           :active-id="activeConversationId"
           :actions="conversationActions"
+          :loading="conversationStore.isLoading"
+          :error="conversationStore.error"
           @select="selectConversation"
           @action="handleConversationAction"
+          @retry="retryLoadConversations"
+          @new-chat="createNewChat"
         />
       </template>
     </el-scrollbar>

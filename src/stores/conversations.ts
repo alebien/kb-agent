@@ -8,6 +8,8 @@ export const useConversationStore = defineStore('conversations', () => {
   const list = ref<ConversationSummary[]>([])
   /** 会话列表是否正在加载 */
   const isLoading = ref(false)
+  /** 会话列表加载失败提示，空字符串表示无错误 */
+  const error = ref('')
   /** 是否已经成功加载过一次，避免重复请求 */
   let hasLoaded = false
   /** 加载请求序号，账号切换后用于丢弃上一个账号的迟到响应 */
@@ -22,6 +24,7 @@ export const useConversationStore = defineStore('conversations', () => {
     /** 本次加载的请求序号 */
     const token = ++loadToken
     isLoading.value = true
+    error.value = ''
 
     try {
       /** 接口返回的会话列表 */
@@ -37,9 +40,8 @@ export const useConversationStore = defineStore('conversations', () => {
         return
       }
 
-      if (!hasLoaded) {
-        list.value = []
-      }
+      // 失败时保留已有数据，只补充错误提示，避免列表突然清空
+      error.value = '对话列表加载失败'
     } finally {
       if (token === loadToken) {
         isLoading.value = false
@@ -63,6 +65,7 @@ export const useConversationStore = defineStore('conversations', () => {
     list.value = []
     hasLoaded = false
     isLoading.value = false
+    error.value = ''
   }
 
   /** 更新指定会话在列表中的标题 */
@@ -86,5 +89,5 @@ export const useConversationStore = defineStore('conversations', () => {
     list.value = [summary, ...list.value.filter((conversation) => conversation.id !== id)]
   }
 
-  return { list, isLoading, load, add, remove, reset, updateTitle, updateTime }
+  return { list, isLoading, error, load, add, remove, reset, updateTitle, updateTime }
 })

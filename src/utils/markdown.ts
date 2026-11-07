@@ -126,3 +126,63 @@ export function renderMarkdownInline(source: string): string {
   const html = markdown.renderInline(source ?? '')
   return DOMPurify.sanitize(html, PURIFY_CONFIG)
 }
+
+/**
+ * 把 Markdown 转成纯文本，供「复制文本」使用
+ *
+ * 先渲染成 HTML 再读取 textContent，代码块、表格结构不会破坏，
+ * 同时给块级元素补换行，避免段落与列表项被拼成一行
+ *
+ * @param source Markdown 源码
+ * @returns 去掉标记后的纯文本
+ */
+export function markdownToPlainText(source: string): string {
+  /** 临时容器，只用于提取文本，不挂载到页面 */
+  const container = document.createElement('div')
+  container.innerHTML = renderMarkdown(source ?? '')
+
+  container
+    .querySelectorAll('p, li, tr, h1, h2, h3, h4, h5, h6, blockquote, pre, br')
+    .forEach((node) => {
+      if (node.tagName === 'BR') {
+        node.replaceWith('\n')
+        return
+      }
+
+      node.append('\n')
+    })
+
+  /** 提取到的纯文本 */
+  const text = container.textContent ?? ''
+  return text
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+/**
+ * 按字符数安全截断 Markdown，供长回答折叠使用
+ *
+ * 直接 slice 容易把代码围栏、表格切一半，折叠态会出现整页错乱：
+ * - 优先回退到最近的空行，避免在段落中间断开；
+ * - 若截断处仍处于未闭合的代码块内，自动补一个 ``` 收尾
+ *
+ * @param source Markdown 源码
+ * @param limit 允许保留的最大字符数
+ * @returns 截断后的 Markdown，未超限时原样返回
+ */
+export function truncateMarkdown(source: string, limit: number): string {
+  if (source.length <= limit) {
+    return source
+  }
+
+  /** 上限内的原始切片 */
+  const slice = source.slice(0, limit)
+  /** 最近的段落边界位置，找不到时为 -1 */
+  const breakIndex = slice.lastIndexOf('\n\n')
+  /** 实际保留的文本，段落边界过于靠前时不做回退 */
+  const head = breakIndex > limit * 0.6 ? slice.slice(0, breakIndex) : slice
+  /** 已出现的代码围栏数量，奇数表示代码块尚未闭合 */
+  const fenceCount = (head.match(/^```/gm) ?? []).length
+  return fenceCount % 2 === 1 ? `${head}\n` + '```' : head
+}

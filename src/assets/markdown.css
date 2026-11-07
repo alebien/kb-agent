@@ -82,8 +82,10 @@
 }
 
 .markdown-body pre {
+  max-height: 420px;
   padding: 12px 14px;
-  overflow-x: auto;
+  overflow: auto;
+  overscroll-behavior: contain;
   background: #1e1e1e;
   border-radius: 8px;
 }

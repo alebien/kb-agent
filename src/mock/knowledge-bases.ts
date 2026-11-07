@@ -2,7 +2,7 @@ import type { KnowledgeBase } from '@/domain'
 
 /**
  * 知识库 mock 数据，覆盖售后、财务、会员、物流与话术五个业务域
- * documentCount 不含已软删除文档，chunkCount 只累加解析成功文档的文本块数，与 documents.ts 保持一致
+ * documentCount 与 chunkCount 均为接口统计口径，本端只读不写
  */
 export const knowledgeBases: KnowledgeBase[] = [
   {

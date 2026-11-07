@@ -18,26 +18,22 @@ export interface ConversationMenuAction {
   visible: boolean
 }
 
-/** 生成会话操作菜单时的权限参数 */
-export function createConversationMenuActions(options: {
-  /** 是否拥有重命名权限 */
-  canRename: boolean
-  /** 是否拥有删除权限 */
-  canDelete: boolean
-}): ConversationMenuAction[] {
-  return [
-    {
-      key: 'rename',
-      label: '重命名',
-      icon: 'edit',
-      visible: options.canRename,
-    },
-    {
-      key: 'delete',
-      label: '删除此对话',
-      icon: 'trash',
-      danger: true,
-      visible: options.canDelete,
-    },
-  ]
-}
+/**
+ * 会话操作菜单
+ * MVP 只有客服一个角色，登录人对自己创建的会话固定拥有重命名与删除能力
+ */
+export const CONVERSATION_MENU_ACTIONS: ConversationMenuAction[] = [
+  {
+    key: 'rename',
+    label: '重命名',
+    icon: 'edit',
+    visible: true,
+  },
+  {
+    key: 'delete',
+    label: '删除此对话',
+    icon: 'trash',
+    danger: true,
+    visible: true,
+  },
+]

@@ -14,9 +14,7 @@ function delay<T>(value: T, milliseconds = 260): Promise<T> {
  */
 export async function fetchDocuments(includeDeleted = false): Promise<Document[]> {
   /** 需要展示的文档，默认排除软删除项，供文档库列表使用 */
-  const visible = includeDeleted
-    ? documents
-    : documents.filter((document) => !document.deletedAt)
+  const visible = includeDeleted ? documents : documents.filter((document) => !document.deletedAt)
 
   /** 拷贝并按上传时间倒序排列的列表，避免调用方直接改动 mock 源数据 */
   const list = visible

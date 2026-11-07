@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import MessageActionButton from './MessageActionButton.vue'
 import type { UserMessage } from '@/domain'
+import { maskSensitiveText } from '@/utils/mask'
 
 /** 单条用户消息 */
 const props = defineProps<{
@@ -15,15 +17,30 @@ const emit = defineEmits<{
   delete: [message: UserMessage]
 }>()
 
-/** 用户消息超过该字符数时折叠，避免长提问撑满页面 */
-const collapseThreshold = 600
-/** 是否处于折叠状态，默认折叠超长提问 */
-const isCollapsed = computed(() => props.message.content.length > collapseThreshold)
+/** 用户消息折叠阈值，与助手消息保持一致，超过后默认折叠 */
+const COLLAPSE_THRESHOLD = 900
+/** 是否手动展开了超长提问 */
+const isExpanded = ref(false)
+/** 提问内容是否超长，决定是否展示展开按钮 */
+const isOverflow = computed(() => props.message.content.length > COLLAPSE_THRESHOLD)
+/** 实际展示的文本，超长且未展开时按字符截断 */
+const displayContent = computed(() => {
+  if (isExpanded.value || !isOverflow.value) {
+    return props.message.content
+  }
 
-/** 复制用户消息原文 */
+  return `${props.message.content.slice(0, COLLAPSE_THRESHOLD)}…`
+})
+
+/** 切换超长提问的展开状态 */
+function toggleExpand() {
+  isExpanded.value = !isExpanded.value
+}
+
+/** 复制用户提问，手机号与邮箱按脱敏规则替换 */
 async function copyMessage() {
   try {
-    await navigator.clipboard.writeText(props.message.content)
+    await navigator.clipboard.writeText(maskSensitiveText(props.message.content))
     ElMessage.success('已复制')
   } catch {
     ElMessage.error('复制失败，请手动选择文本')
@@ -34,13 +51,18 @@ async function copyMessage() {
 <template>
   <article class="message-row is-user">
     <div class="user-message">
-      <div class="user-bubble" :class="{ 'is-collapsed': isCollapsed }">
-        {{ message.content }}
-      </div>
+      <div class="user-bubble">{{ displayContent }}</div>
 
       <div class="message-actions">
-        <el-button text size="small" @click="copyMessage">复制</el-button>
-        <el-button text size="small" type="danger" @click="emit('delete', message)">删除</el-button>
+        <MessageActionButton label="复制" icon="copy" @click="copyMessage" />
+        <MessageActionButton
+          v-if="isOverflow"
+          :label="isExpanded ? '收起' : '展开全文'"
+          :icon="isExpanded ? 'collapse' : 'expand'"
+          :active="isExpanded"
+          @click="toggleExpand"
+        />
+        <MessageActionButton label="删除" icon="delete" danger @click="emit('delete', message)" />
       </div>
     </div>
   </article>
@@ -72,31 +94,6 @@ async function copyMessage() {
   background: var(--el-color-primary-light-9);
   background: color-mix(in srgb, var(--el-color-primary-light-8) 55%, var(--el-bg-color));
   border-radius: 14px;
-}
-
-.user-bubble.is-collapsed {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 12;
-}
-
-.message-actions {
-  display: flex;
-  gap: 2px;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-
-.user-message:hover .message-actions,
-.user-message:focus-within .message-actions {
-  opacity: 1;
-}
-
-@media (hover: none) {
-  .message-actions {
-    opacity: 1;
-  }
 }
 
 @media (max-width: 640px) {

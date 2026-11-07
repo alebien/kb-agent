@@ -1,14 +1,25 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
+import MarkdownRenderer from '@/components/common/MarkdownRenderer.vue'
+import MessageActionButton from './MessageActionButton.vue'
+import MessageActionIcon from './MessageActionIcon.vue'
 import type { AgentMessage } from '@/domain'
+import { markdownToPlainText, truncateMarkdown } from '@/utils/markdown'
+import { maskSensitiveText } from '@/utils/mask'
 
 /** 单条助手消息 */
-const props = defineProps<{
-  /** 助手消息数据 */
-  message: AgentMessage
-}>()
+const props = withDefaults(
+  defineProps<{
+    /** 助手消息数据 */
+    message: AgentMessage
+    /** 是否为会话最后一条消息，只有最后一条允许重新生成 */
+    canRetry?: boolean
+  }>(),
+  {
+    canRetry: false,
+  },
+)
 
 /** 向消息列表派发的操作事件 */
 const emit = defineEmits<{
@@ -21,9 +32,7 @@ const emit = defineEmits<{
 }>()
 
 /** 长消息折叠阈值，超过后默认只展示前 900 字，降低长 Markdown 渲染压力 */
-const collapseThreshold = 900
-/** 长消息折叠时保留的字符数 */
-const collapsedLength = 900
+const COLLAPSE_THRESHOLD = 900
 /** 是否手动展开长消息 */
 const isExpanded = ref(false)
 /** 当前消息是否正在流式生成 */
@@ -31,36 +40,68 @@ const isStreaming = computed(() => props.message.status === 'streaming')
 /** 当前消息是否生成失败 */
 const isFailed = computed(() => props.message.status === 'failed')
 
-/** 用于渲染的正文，长消息未展开时截断，避免一次性渲染超长 Markdown */
+/** 用于渲染的正文，未展开时按安全边界截断，避免切断代码块与表格 */
 const displayContent = computed(() => {
-  if (isExpanded.value || props.message.content.length <= collapseThreshold) {
+  // 生成中不折叠，避免回答在 900 字处突然停住，结束后再按折叠态展示
+  if (isExpanded.value || isStreaming.value) {
     return props.message.content
   }
 
-  return `${props.message.content.slice(0, collapsedLength)}\n\n…`
+  return truncateMarkdown(props.message.content, COLLAPSE_THRESHOLD)
 })
 
 /** 是否展示展开按钮 */
-const showExpandButton = computed(() => props.message.content.length > collapseThreshold)
+const showExpandButton = computed(() => props.message.content.length > COLLAPSE_THRESHOLD)
 
-/** 折叠状态下的截断提示，不参与 Markdown 解析 */
-const collapsedHint = computed(
+/** 折叠态提示文案，仅在生成结束后展示 */
+const showCollapsedHint = computed(
   () => showExpandButton.value && !isExpanded.value && !isStreaming.value,
 )
 
-/** 复制助手回答原文 */
-async function copyMessage() {
+/** 切换长消息展开状态 */
+function toggleExpand() {
+  isExpanded.value = !isExpanded.value
+}
+
+/**
+ * 复制到剪贴板并给出统一反馈
+ *
+ * @param text 已脱敏的待复制文本
+ * @param successMessage 复制成功提示
+ */
+async function copyToClipboard(text: string, successMessage: string) {
   try {
-    await navigator.clipboard.writeText(props.message.content)
-    ElMessage.success('已复制')
+    await navigator.clipboard.writeText(text)
+    ElMessage.success(successMessage)
   } catch {
     ElMessage.error('复制失败，请手动选择文本')
   }
 }
 
-/** 切换长消息展开状态 */
-function toggleExpand() {
-  isExpanded.value = !isExpanded.value
+/** 复制纯文本，保留内容但不带 Markdown 标记 */
+function copyPlainText() {
+  void copyToClipboard(maskSensitiveText(markdownToPlainText(props.message.content)), '已复制文本')
+}
+
+/** 复制 Markdown 原文，便于粘贴到其他编辑器 */
+function copyMarkdown() {
+  void copyToClipboard(maskSensitiveText(props.message.content), '已复制 Markdown')
+}
+
+/**
+ * 处理复制菜单的选择
+ *
+ * @param command 下拉菜单项标识，Element Plus 回调可能传入数字或对象
+ */
+function handleCopyCommand(command: string | number | object) {
+  if (command === 'markdown') {
+    copyMarkdown()
+    return
+  }
+
+  if (command === 'text') {
+    copyPlainText()
+  }
 }
 
 // 每条长消息独立记录展开状态；切换到另一条消息时恢复折叠
@@ -86,14 +127,6 @@ watch(
       </div>
       <MarkdownRenderer v-else :content="displayContent" :streaming="isStreaming" />
 
-      <p v-if="collapsedHint" class="agent-message__collapse-hint">
-        内容较长，已折叠
-        <el-button text size="small" type="primary" @click="toggleExpand">展开全文</el-button>
-      </p>
-      <p v-else-if="showExpandButton && isExpanded" class="agent-message__collapse-hint">
-        <el-button text size="small" type="primary" @click="toggleExpand">收起</el-button>
-      </p>
-
       <div v-if="message.citations.length" class="message-sources">
         <div v-for="citation in message.citations" :key="citation.id" class="source-card">
           <strong>{{ citation.name }}</strong>
@@ -112,21 +145,43 @@ watch(
       />
 
       <div class="message-actions">
-        <el-button
+        <MessageActionButton
           v-if="isStreaming"
-          text
-          size="small"
-          type="danger"
+          label="停止生成"
+          icon="stop"
+          danger
           @click="emit('stop', message)"
-        >
-          停止
-        </el-button>
+        />
+
         <template v-else>
-          <el-button text size="small" @click="copyMessage">复制</el-button>
-          <el-button text size="small" @click="emit('retry', message)">重试</el-button>
-          <el-button text size="small" type="danger" @click="emit('delete', message)"
-            >删除</el-button
-          >
+          <el-dropdown trigger="hover" placement="top-start" @command="handleCopyCommand">
+            <button type="button" class="message-action" aria-label="复制" title="复制">
+              <MessageActionIcon name="copy" />
+            </button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="text">复制文本</el-dropdown-item>
+                <el-dropdown-item command="markdown">复制为 Markdown</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+
+          <MessageActionButton
+            v-if="canRetry"
+            label="重新生成"
+            icon="retry"
+            @click="emit('retry', message)"
+          />
+          <MessageActionButton
+            v-if="showExpandButton"
+            :label="isExpanded ? '收起' : '展开全文'"
+            :icon="isExpanded ? 'collapse' : 'expand'"
+            :active="isExpanded"
+            @click="toggleExpand"
+          />
+          <MessageActionButton label="删除" icon="delete" danger @click="emit('delete', message)" />
+
+          <span v-if="showCollapsedHint" class="message-actions__hint">内容较长，已折叠</span>
         </template>
       </div>
     </div>
@@ -174,30 +229,21 @@ watch(
   animation-delay: 0.3s;
 }
 
-.agent-message__collapse-hint {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin: 8px 0 0;
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-}
-
 .message-sources {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  margin-top: 16px;
 }
 
 .source-card {
-  padding: 12px 14px;
+  padding: 10px 12px;
+  background: var(--el-fill-color-lighter);
   border: 1px solid var(--el-border-color-lighter);
-  border-radius: 8px;
+  border-radius: 10px;
 }
 
 .source-card strong {
-  display: block;
   font-size: 13px;
   font-weight: 600;
 }
@@ -217,27 +263,6 @@ watch(
 
 .agent-message__error {
   margin-top: 12px;
-}
-
-.message-actions {
-  display: flex;
-  min-height: 24px;
-  align-items: center;
-  gap: 2px;
-  margin-top: 6px;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-
-.agent-message:hover .message-actions,
-.agent-message:focus-within .message-actions {
-  opacity: 1;
-}
-
-@media (hover: none) {
-  .message-actions {
-    opacity: 1;
-  }
 }
 
 @media (max-width: 640px) {

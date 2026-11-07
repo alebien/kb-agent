@@ -2,12 +2,18 @@
 
 每个业务域一个文件，负责模拟网络请求。接入真实后端时，只改本目录。
 
-- `auth.ts`：登录接口。
-- `conversations.ts`：会话列表、详情、创建、删除、重命名。
-- `documents.ts`：知识库文档列表，数据来自 `@/mock`，按上传时间倒序返回。
-- `eval-cases.ts`：评测用例列表，数据来自 `@/mock`，保持按评测集分组的顺序。
-- `tickets.ts`：工单列表，数据来自 `@/mock`，按创建时间倒序返回。
+MVP 内：
 
-约定：函数返回 `Promise`，失败时 `throw Error`，错误信息可直接展示给用户。
+- `auth.ts`：登录、登出与会话恢复。
+- `conversations.ts`：会话列表、详情、创建、重命名、删除、发送消息、停止与重新生成。
+- `knowledge-bases.ts`：知识库列表，固定 5 条，其中 `kb_script` 为 paused。
+
+MVP 外保留，不对应导航入口：
+
+- `documents.ts`：知识库文档列表。
+- `eval-cases.ts`：评测用例列表。
+- `tickets.ts`：工单列表。
+
+约定：函数返回 `Promise`，失败时 `throw Error`，错误信息可直接展示给用户；会话相关接口统一按 `createdBy` 校验归属，失败抛出 `ConversationForbiddenError`。
 
 列表接口返回前都会拷贝一份数据，调用方可以放心改动，不会影响 mock 源数据。

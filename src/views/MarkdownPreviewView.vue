@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
+import MarkdownRenderer from '@/components/common/MarkdownRenderer.vue'
 import { markdownSamples } from '@/mock'
 import type { MarkdownSampleKey } from '@/mock'
 

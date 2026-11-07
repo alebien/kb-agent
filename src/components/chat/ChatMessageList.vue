@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { AgentMessage, Message, UserMessage } from '@/domain'
-import AgentMessageItem from './AgentMessageItem.vue'
-import UserMessageItem from './UserMessageItem.vue'
+import ChatMessageItem from './ChatMessageItem.vue'
 
 /** 当前会话的消息列表 */
 const props = defineProps<{
@@ -26,6 +25,11 @@ const scrollbarRef = ref<{ wrapRef?: HTMLElement }>()
 const isNearBottom = ref(true)
 /** 是否展示回到底部按钮 */
 const showBackToBottom = ref(false)
+
+/** 最后一条消息 id，只有它允许重新生成 */
+const lastMessageId = computed(() => props.messages.at(-1)?.id ?? '')
+/** 待执行的滚动帧 id，用于合并高频的流式更新 */
+let scrollFrame = 0
 
 /** 获取真实滚动容器，Element Plus 的 scrollbar 实例包含 wrapRef */
 function getScrollWrap(): HTMLElement | null {
@@ -60,6 +64,31 @@ async function scrollToBottom() {
   showBackToBottom.value = false
 }
 
+/**
+ * 合并高频滚动请求
+ *
+ * 流式输出时每个 chunk 都会触发消息变化，如果每次都 nextTick + scrollTo，
+ * 会造成大量强制重排；这里用一帧内的合并代替
+ */
+function scheduleScrollToBottom() {
+  if (scrollFrame) {
+    return
+  }
+
+  scrollFrame = requestAnimationFrame(() => {
+    scrollFrame = 0
+    /** 当前滚动容器 */
+    const wrap = getScrollWrap()
+    if (!wrap) {
+      return
+    }
+
+    wrap.scrollTop = wrap.scrollHeight
+    isNearBottom.value = true
+    showBackToBottom.value = false
+  })
+}
+
 /** 点击回到底部，恢复自动跟随 */
 function handleBackToBottom() {
   void scrollToBottom()
@@ -70,7 +99,7 @@ watch(
   () => props.messages,
   () => {
     if (isNearBottom.value) {
-      void scrollToBottom()
+      scheduleScrollToBottom()
     }
   },
   { deep: true },
@@ -84,6 +113,11 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   getScrollWrap()?.removeEventListener('scroll', updateScrollState)
+
+  if (scrollFrame) {
+    cancelAnimationFrame(scrollFrame)
+    scrollFrame = 0
+  }
 })
 </script>
 
@@ -91,20 +125,16 @@ onBeforeUnmount(() => {
   <div class="message-viewport">
     <el-scrollbar ref="scrollbarRef" class="message-scroll">
       <div class="message-stack">
-        <template v-for="message in messages" :key="message.id">
-          <UserMessageItem
-            v-if="message.role === 'user'"
-            :message="message"
-            @delete="emit('delete', $event)"
-          />
-          <AgentMessageItem
-            v-else-if="message.role === 'agent'"
-            :message="message"
-            @retry="emit('retry', $event)"
-            @stop="emit('stop', $event)"
-            @delete="emit('delete', $event)"
-          />
-        </template>
+        <ChatMessageItem
+          v-for="message in messages"
+          :key="message.id"
+          v-memo="[message.content, message.status, message.id === lastMessageId]"
+          :message="message"
+          :can-retry="message.id === lastMessageId"
+          @retry="emit('retry', $event)"
+          @stop="emit('stop', $event)"
+          @delete="emit('delete', $event)"
+        />
       </div>
     </el-scrollbar>
 

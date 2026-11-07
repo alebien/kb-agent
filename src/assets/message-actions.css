@@ -1,0 +1,71 @@
+.message-actions {
+  display: flex;
+  min-height: 26px;
+  align-items: center;
+  gap: 2px;
+  margin-top: 6px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+/* 正文悬停或键盘聚焦时再显示操作栏，避免默认堆满界面 */
+.message-row:hover .message-actions,
+.message-row:focus-within .message-actions {
+  opacity: 1;
+}
+
+.message-action {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--el-text-color-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.message-action:hover {
+  color: var(--el-text-color-primary);
+  background: var(--el-fill-color);
+}
+
+.message-action.is-active {
+  color: var(--el-color-primary);
+}
+
+.message-action.is-danger:hover {
+  color: var(--el-color-danger);
+  background: var(--el-color-danger-light-9);
+}
+
+.message-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.message-action:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 1px;
+}
+
+/* 操作栏右侧的补充说明，例如「内容较长，已折叠」 */
+.message-actions__hint {
+  margin-left: 4px;
+  color: var(--el-text-color-placeholder);
+  font-size: 12px;
+  line-height: 1;
+}
+
+/* 触屏设备没有悬停态，操作栏保持常驻 */
+@media (hover: none) {
+  .message-actions {
+    opacity: 1;
+  }
+}

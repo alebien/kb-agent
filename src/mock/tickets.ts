@@ -9,7 +9,8 @@ export const tickets: Ticket[] = [
     category: 'refund',
     status: 'in_progress',
     priority: 'high',
-    description: '用户 10-28 提交退款，承诺 3 个工作日到账，至今未到账。已核对支付渠道流水，待财务确认打款批次。',
+    description:
+      '用户 10-28 提交退款，承诺 3 个工作日到账，至今未到账。已核对支付渠道流水，待财务确认打款批次。',
     createdBy: 'u_1001',
     assignee: '张慧',
     relatedConversationId: '9f2c4e1a-7b3d-4c8f-a1e6-2d5b8c0f4a71',
@@ -29,7 +30,8 @@ export const tickets: Ticket[] = [
     category: 'invoice',
     status: 'resolved',
     priority: 'medium',
-    description: '用户下单时填写个人抬头，现需改为公司抬头并补开增值税专用发票。已核对订单与税号，财务已重开并发送至预留邮箱。',
+    description:
+      '用户下单时填写个人抬头，现需改为公司抬头并补开增值税专用发票。已核对订单与税号，财务已重开并发送至预留邮箱。',
     createdBy: 'u_1002',
     assignee: '李维',
     relatedConversationId: '3a7d6b2e-9c14-4f58-8b6a-1e0d7c4f2b93',
@@ -50,7 +52,8 @@ export const tickets: Ticket[] = [
     category: 'membership',
     status: 'closed',
     priority: 'low',
-    description: '用户对比年卡与季卡权益后决定暂不续费，要求关闭自动续费。已指导用户在账户设置中关闭自动续费并确认生效。',
+    description:
+      '用户对比年卡与季卡权益后决定暂不续费，要求关闭自动续费。已指导用户在账户设置中关闭自动续费并确认生效。',
     createdBy: 'u_1003',
     assignee: '周晴',
     relatedConversationId: '6c1e8f3d-2a5b-4d7c-9e0f-8b4a6c2d1e57',
@@ -73,7 +76,8 @@ export const tickets: Ticket[] = [
     category: 'logistics',
     status: 'in_progress',
     priority: 'urgent',
-    description: '包裹在转运中心停留三天无新轨迹，用户要求全额赔付。已向承运商发起丢件核查工单，等待定责结果。',
+    description:
+      '包裹在转运中心停留三天无新轨迹，用户要求全额赔付。已向承运商发起丢件核查工单，等待定责结果。',
     createdBy: 'u_1004',
     assignee: '陈屿',
     relatedConversationId: 'c4b8e2a6-1f3d-4a9c-8b7e-5d0f2a6c9e13',
@@ -93,7 +97,8 @@ export const tickets: Ticket[] = [
     category: 'other',
     status: 'open',
     priority: 'low',
-    description: '运营反馈退款话术缺少超时赔付口径，需要补充进知识库。已整理三版候选话术，待客服主管确认后录入。',
+    description:
+      '运营反馈退款话术缺少超时赔付口径，需要补充进知识库。已整理三版候选话术，待客服主管确认后录入。',
     createdBy: 'u_1005',
     relatedConversationId: '2e7a9c4b-6d1f-4b8e-a3c5-9f0d7b2e6a84',
     tags: ['话术', '知识库'],
@@ -113,7 +118,8 @@ export const tickets: Ticket[] = [
     category: 'refund',
     status: 'resolved',
     priority: 'high',
-    description: '用户支付时因网络重试产生两笔扣款，第二笔为重复支付。已核对两笔流水并原路退回多扣金额。',
+    description:
+      '用户支付时因网络重试产生两笔扣款，第二笔为重复支付。已核对两笔流水并原路退回多扣金额。',
     createdBy: 'u_1001',
     assignee: '张慧',
     tags: ['退款', '重复扣款'],
@@ -133,7 +139,8 @@ export const tickets: Ticket[] = [
     category: 'logistics',
     status: 'open',
     priority: 'medium',
-    description: '订单显示已到达本地网点但两天未派送，用户要求尽快送达。已提交催派申请，待网点回访确认派送时间。',
+    description:
+      '订单显示已到达本地网点但两天未派送，用户要求尽快送达。已提交催派申请，待网点回访确认派送时间。',
     createdBy: 'u_1002',
     tags: ['物流', '催派'],
     createdAt: '2026-10-25T08:40:00+08:00',
@@ -150,7 +157,8 @@ export const tickets: Ticket[] = [
     category: 'refund',
     status: 'in_progress',
     priority: 'urgent',
-    description: '用户收到退款比实付少 38 元，怀疑优惠券被重复抵扣。已调取订单分摊明细，待财务复核差额去向。',
+    description:
+      '用户收到退款比实付少 38 元，怀疑优惠券被重复抵扣。已调取订单分摊明细，待财务复核差额去向。',
     createdBy: 'u_1003',
     assignee: '李维',
     tags: ['退款', '金额差异', '资金核对'],
@@ -169,7 +177,8 @@ export const tickets: Ticket[] = [
     category: 'membership',
     status: 'closed',
     priority: 'medium',
-    description: '用户 10-15 到期的积分未收到提醒，要求恢复。已核实提醒发送记录，按补偿规则补发等值积分并告知用户。',
+    description:
+      '用户 10-15 到期的积分未收到提醒，要求恢复。已核实提醒发送记录，按补偿规则补发等值积分并告知用户。',
     createdBy: 'u_1004',
     assignee: '周晴',
     tags: ['会员', '积分'],

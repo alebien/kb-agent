@@ -1,23 +1,61 @@
 <script setup lang="ts">
-withDefaults(
+import { computed } from 'vue'
+
+/** 空状态出现的场景 */
+type EmptyVariant = 'draft' | 'conversation'
+
+/** 空状态参数 */
+const props = withDefaults(
   defineProps<{
-    /** 空状态主标题 */
+    /** 场景：草稿页与「真实但无消息」的会话文案不同 */
+    variant?: EmptyVariant
+    /** 覆盖默认主标题，为空时按场景取默认文案 */
     title?: string
-    /** 空状态辅助说明，为空时不展示 */
+    /** 覆盖默认辅助说明，为空时按场景取默认文案 */
     description?: string
   }>(),
   {
-    title: '你好，我是 KnoAgent',
-    description: '有什么可以帮你的吗？',
+    variant: 'draft',
+    title: '',
+    description: '',
   },
 )
+
+/** 向页面派发的空状态主操作 */
+const emit = defineEmits<{
+  /** 请求新建对话，仅有消息的会话空态提供该操作 */
+  'new-chat': []
+}>()
+
+/** 当前场景的默认文案，遵循「现状 + 下一步」的写法 */
+const preset = computed(() =>
+  props.variant === 'draft'
+    ? {
+        title: '你好，我是 KnoAgent',
+        description: '输入问题开始对话，我会结合企业知识库作答',
+      }
+    : {
+        title: '这个对话还没有消息',
+        description: '在下方输入框提问即可继续，或新建一个对话',
+      },
+)
+
+/** 最终展示的主标题 */
+const displayTitle = computed(() => props.title || preset.value.title)
+/** 最终展示的辅助说明 */
+const displayDescription = computed(() => props.description || preset.value.description)
+/** 是否展示「新建对话」主操作，空会话需要给出明确出口 */
+const showNewChat = computed(() => props.variant === 'conversation')
 </script>
 
 <template>
   <div class="chat-empty">
     <div class="chat-empty__mark">K</div>
-    <h1>{{ title }}</h1>
-    <p v-if="description">{{ description }}</p>
+    <h1>{{ displayTitle }}</h1>
+    <p v-if="displayDescription">{{ displayDescription }}</p>
+    <el-button v-if="showNewChat" class="chat-empty__action" @click="emit('new-chat')">
+      新建对话
+    </el-button>
   </div>
 </template>
 
@@ -55,6 +93,10 @@ withDefaults(
   margin: 8px 0 0;
   color: var(--el-text-color-secondary);
   font-size: 14px;
+}
+
+.chat-empty__action {
+  margin-top: 20px;
 }
 
 @media (max-width: 640px) {

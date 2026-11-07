@@ -39,3 +39,17 @@ export function maskEmail(email: string): string {
 
   return `${email.slice(0, 1)}***${email.slice(at)}`
 }
+
+/**
+ * 文本整体脱敏，供复制消息与埋点上报前调用
+ *
+ * 先处理邮箱再处理手机号，避免邮箱中的连续数字被误判成手机号
+ *
+ * @param text 原始文本，可能包含手机号或邮箱
+ * @returns 替换为脱敏格式后的文本
+ */
+export function maskSensitiveText(text: string): string {
+  return text
+    .replace(/[\w.-]+@[\w.-]+\.\w+/g, (match) => maskEmail(match))
+    .replace(/1[3-9]\d{9}/g, (match) => maskPhone(match))
+}

@@ -476,8 +476,8 @@ export async function sendMessage(
         return { summary: { ...conversation.summary }, answerId }
       }
       answer.content += chunk
+      // 流式过程中只回传增量，避免每个 chunk 都深拷贝并替换整条消息列表
       handlers.onChunk(chunk)
-      notifyConversationUpdate(conversation, handlers)
     }
 
     answer.status = 'completed'
@@ -626,8 +626,8 @@ export async function regenerateMessage(
         return
       }
       answer.content += chunk
+      // 流式过程中只回传增量，避免每个 chunk 都深拷贝并替换整条消息列表
       handlers.onChunk(chunk)
-      notifyConversationUpdate(conversation, handlers)
     }
 
     answer.status = 'completed'

@@ -1,7 +1,7 @@
 /**
  * 埋点上报入口
  *
- * 当前只做事件契约、内存缓冲与批量上报的调度骨架，不发送网络请求；
+ * 当前只做事件契约、内存缓冲与批量上报的调度骨架，不发送网络请求
  * 接入真实埋点服务时只替换 drain 内部实现，调用方与事件清单不变
  */
 import { ANALYTICS_EVENTS, type AnalyticsEvent } from './analytics-events'
@@ -18,19 +18,16 @@ export interface AnalyticsRecord {
   payload: Record<string, string | number | boolean | null>
 }
 
-/** 缓冲上限，达到后丢弃最早一条并计数，避免长时间离线无限积压 */
+/** 缓冲上限，达到后丢弃最早一条，避免长时间离线时无限积压 */
 const MAX_BUFFER = 200
 
 /** 本地缓冲，接入真实服务前先存在内存里 */
 const buffer: AnalyticsRecord[] = []
 
-/** 因缓冲溢出被丢弃的事件数，便于排查上报缺口 */
-let droppedCount = 0
-
 /** 事件名白名单，用于拦截未登记的拼写错误 */
 const allowedEvents = new Set<string>(ANALYTICS_EVENTS)
 
-/** 记录一条埋点事件；事件名未登记时直接抛错，避免脏数据流入 */
+/** 记录一条埋点事件；事件名未登记时直接抛错 */
 export function track(event: AnalyticsEvent, payload: AnalyticsRecord['payload'] = {}): void {
   if (!allowedEvents.has(event)) {
     throw new Error(`未登记的埋点事件：${event}`)
@@ -39,11 +36,10 @@ export function track(event: AnalyticsEvent, payload: AnalyticsRecord['payload']
   buffer.push({ event, occurredAt: new Date().toISOString(), payload })
   if (buffer.length > MAX_BUFFER) {
     buffer.shift()
-    droppedCount += 1
   }
 }
 
-/** 取出并清空当前缓冲，供上报逻辑批量发送；当前没有真实上报实现 */
+/** 取出并清空当前缓冲，供上报逻辑批量发送 */
 export function drain(): AnalyticsRecord[] {
   return buffer.splice(0, buffer.length)
 }
@@ -51,9 +47,4 @@ export function drain(): AnalyticsRecord[] {
 /** 当前缓冲里的事件数量，达到上限时应立即触发一次 drain */
 export function pendingCount(): number {
   return buffer.length
-}
-
-/** 因缓冲溢出丢弃的事件数，用于监控上报缺口 */
-export function droppedTotal(): number {
-  return droppedCount
 }

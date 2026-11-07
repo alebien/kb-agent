@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
@@ -7,6 +7,8 @@ import { useAppViewportHeight } from '@/composables/useAppViewportHeight'
 
 /** 当前路由信息，路由变化时关闭移动端抽屉 */
 const route = useRoute()
+/** 当前是否为对话工作区，草稿页与真实会话页共用同一套滚动结构 */
+const isChatPage = computed(() => route.name === 'chat-draft' || route.name === 'chat')
 /** 移动端侧边栏抽屉是否打开 */
 const isSidebarOpen = ref(false)
 /** 桌面端侧边栏折叠状态在 localStorage 中的键名 */
@@ -43,6 +45,23 @@ watch(isSidebarCollapsed, (value) => {
     window.localStorage.setItem(sidebarCollapsedKey, value ? '1' : '0')
   }
 })
+
+/** 全局快捷键：Ctrl/Cmd + B 折叠或展开桌面端侧边栏 */
+function handleGlobalKeydown(event: KeyboardEvent) {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'b') {
+    // 让浏览器默认的书签行为让位给侧边栏开合
+    event.preventDefault()
+    toggleSidebarCollapse()
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleGlobalKeydown)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleGlobalKeydown)
+})
 </script>
 
 <template>
@@ -57,7 +76,7 @@ watch(isSidebarCollapsed, (value) => {
     <el-container class="app-body" direction="vertical">
       <AppHeader :nav-open="isSidebarOpen" @open-nav="openSidebar" />
 
-      <el-main class="app-main" :class="{ 'is-chat': route.name === 'chat' }">
+      <el-main class="app-main" :class="{ 'is-chat': isChatPage }">
         <RouterView />
       </el-main>
     </el-container>
