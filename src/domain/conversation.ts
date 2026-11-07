@@ -1,6 +1,4 @@
-import type { Citation } from './citation'
 import type { Message } from './message'
-import type { ToolCall } from './tool-call'
 
 /** 会话摘要，用于左侧「最近对话」列表 */
 export interface ConversationSummary {
@@ -27,12 +25,11 @@ export interface Conversation {
   ticket: string | null
   /** 链路追踪标识 */
   traceId: string
-  /** 消息列表 */
+  /**
+   * 消息列表，工具调用和引用只挂在消息上
+   * 原则：数据只存一份，需要不同视图时派生，不要复制
+   */
   messages: Message[]
-  /** 工具调用步骤 */
-  toolCalls: ToolCall[]
-  /** 引用来源列表 */
-  citations: Citation[]
   /** 会话统计信息 */
   stats: ConversationStats
   /** 质量指标列表，用于右侧观测面板 */
@@ -43,14 +40,14 @@ export interface Conversation {
 
 /** 会话统计信息，用于观测面板展示 */
 export interface ConversationStats {
-  /** 总耗时 */
-  duration: string
+  /** 总耗时， 单位毫秒 */
+  duration: number
   /** 消耗的 Token 数 */
-  tokens: string
+  tokens: number
   /** 本次会话成本 */
-  cost: string
+  cost: number
   /** 引用条数 */
-  citations: string
+  citations: number
 }
 
 /** 会话质量指标 */
@@ -69,8 +66,8 @@ export interface TraceStep {
   id: string
   /** 链路节点名 */
   name: string
-  /** 执行耗时，展示用字符串 */
-  duration: string
+  /** 执行耗时，单位毫秒，展示时再格式化为字符串 */
+  duration: number
   /** 步骤说明，可为空 */
-  detail: string
+  detail?: string
 }

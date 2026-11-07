@@ -1,12 +1,4 @@
 /** 所有业务实体共享的基础字段 */
-export interface BaseEntity {
-  /** 实体唯一标识 */
-  id: string
-  /** 创建时间，ISO 8601 字符串 */
-  createdAt: string
-  /** 最后更新时间，ISO 8601 字符串 */
-  updatedAt: string
-}
 
 /** 接口请求的统一分页参数 */
 export interface PageQuery {

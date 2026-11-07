@@ -6,8 +6,8 @@ export interface Citation {
   documentId?: string
   /** 来源文档名称 */
   name: string
-  /** 来源补充说明，例如命中片段或更新时间 */
-  description: string
+  /** 来源补充说明；没有时不传 */
+  description?: string
   /** 命中的原文片段 */
   snippet?: string
   /** 片段在文档中的页码，未知时不传 */
