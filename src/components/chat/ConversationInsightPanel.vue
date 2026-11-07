@@ -19,6 +19,15 @@ const stats = computed(() => {
     { label: '引用', value: values.citations },
   ]
 })
+
+/** 引用来源列表，引用只挂在助手消息上，面板展示时从消息派生并按 id 去重 */
+const citations = computed(() => {
+  /** 所有助手消息携带的引用 */
+  const all = props.detail.messages.flatMap((message) =>
+    message.role === 'agent' ? message.citations : [],
+  )
+  return [...new Map(all.map((citation) => [citation.id, citation])).values()]
+})
 </script>
 
 <template>
@@ -66,7 +75,7 @@ const stats = computed(() => {
         </el-card>
 
         <el-card shadow="never" header="引用来源">
-          <div v-for="citation in detail.citations" :key="citation.id" class="source-group">
+          <div v-for="citation in citations" :key="citation.id" class="source-group">
             <div class="source-entry">
               <el-link type="primary" :underline="false">{{ citation.name }}</el-link>
               <p>{{ citation.description }}</p>

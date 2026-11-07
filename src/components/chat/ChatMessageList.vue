@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
-import type { Citation, Message } from '@/domain'
+import type { Message } from '@/domain'
 
 defineProps<{
-  /** 当前会话的消息列表 */
+  /** 当前会话的消息列表，引用与工具调用都挂在各自的助手消息上 */
   messages: Message[]
-  /** 助手回答引用的知识来源 */
-  citations: Citation[]
 }>()
 </script>
 
@@ -22,15 +20,19 @@ defineProps<{
           {{ message.content }}
         </div>
 
-        <div v-else class="agent-content">
+        <div v-else-if="message.role === 'agent'" class="agent-content">
           <MarkdownRenderer :content="message.content" />
 
-          <div v-if="citations.length" class="message-sources">
-            <div v-for="citation in citations" :key="citation.id" class="source-card">
+          <div v-if="message.citations.length" class="message-sources">
+            <div v-for="citation in message.citations" :key="citation.id" class="source-card">
               <strong>{{ citation.name }}</strong>
               <p>{{ citation.description }}</p>
             </div>
           </div>
+        </div>
+
+        <div v-else class="agent-content">
+          <MarkdownRenderer :content="message.content" />
         </div>
       </article>
     </div>

@@ -148,7 +148,6 @@ watch(
           <ChatMessageList
             v-else-if="currentDetail && hasMessages"
             :messages="currentDetail.messages"
-            :citations="currentDetail.citations"
           />
 
           <ChatEmptyState v-else-if="isDraft || currentDetail" />

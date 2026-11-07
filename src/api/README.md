@@ -4,8 +4,10 @@
 
 - `auth.ts`：登录接口。
 - `conversations.ts`：会话列表、详情、创建、删除、重命名。
-- `documents.ts`：文档接口骨架。
-- `eval-cases.ts`：评测用例接口骨架。
-- `tickets.ts`：工单接口骨架。
+- `documents.ts`：知识库文档列表，数据来自 `@/mock`，按上传时间倒序返回。
+- `eval-cases.ts`：评测用例列表，数据来自 `@/mock`，保持按评测集分组的顺序。
+- `tickets.ts`：工单列表，数据来自 `@/mock`，按创建时间倒序返回。
 
 约定：函数返回 `Promise`，失败时 `throw Error`，错误信息可直接展示给用户。
+
+列表接口返回前都会拷贝一份数据，调用方可以放心改动，不会影响 mock 源数据。

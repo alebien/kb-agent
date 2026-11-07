@@ -9,7 +9,7 @@
 - `tool-call.ts`：工具调用 `ToolCall`。
 - `document.ts`：知识库文档 `Document`。
 - `eval-case.ts`：评测用例 `EvalCase`。
-- `ticket.ts`：工单 `Ticket`，字段待补充。
+- `ticket.ts`：工单 `Ticket`，包含工单号、分类、优先级、处理人与关联会话。
 - `index.ts`：统一出口，业务代码从 `@/domain` 导入。
 
 新增领域对象时，在本目录建文件，并在 `index.ts` 追加导出；每个字段都要写中文注释。
