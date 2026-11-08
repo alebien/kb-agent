@@ -115,6 +115,9 @@ src/
 - `src/api/sse.ts`：传输层。用 `fetch` + `ReadableStream` 手写解析，按空行切事件，兼容 `\r\n`、跨 chunk 分包与结尾缺空行；不用 `EventSource`，因为需要 POST 请求体、自定义请求头与 `AbortController`
 - `src/api/conversations.ts`：业务层。`runAnswerStream` 消费事件写消息，`stopMessage` 通过 `abort()` 直接关闭连接，已生成内容保留
 - `dev/mock-sse-server.ts`：开发端点。Vite 插件的 connect 中间件，只在 `pnpm dev` 下提供 `POST /api/dev/sse/chat`，接真实后端时删掉插件、改掉 `STREAM_URL` 即可
+- `src/components/dev/SseDebugPanel.vue`：开发调试面板。展示原始事件、切换分片大小、模拟断流，只在 `pnpm dev` 下出现
+
+完成语义：`done` 是唯一的成功信号。业务层收到 `done` 后立即停止读取并释放连接，不依赖网关关闭长连接；连接提前关闭但没有 `done` 时按失败处理，避免把半截回答显示成完整回答
 
 事件约定：
 
@@ -139,6 +142,7 @@ curl -N -X POST http://localhost:5173/api/dev/sse/chat \
 `-N` 关闭 curl 缓冲，能逐条看到事件与 `: ping` 心跳。另外两个 query 开关：
 
 - `?scenario=broken`：生成到 40% 时断开，用来验证错误态
+- `?scenario=keep-alive`：`done` 之后保持连接 1.5 秒，用来验证前端不依赖断连判定完成
 - `?chunkSize=20`：每帧字符数（默认 6），改它只变颗粒度、不变总耗时，可对比「细腻打字机」与「整段蹦出」两种体感
 
 注意：SSE 端点只在 `pnpm dev` 下存在，`pnpm preview` 静态预览时发送消息会走失败分支。

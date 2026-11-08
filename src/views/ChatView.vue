@@ -3,7 +3,11 @@ import { ref, watch } from 'vue'
 import ChatComposer from '@/components/chat/ChatComposer.vue'
 import ChatEmptyState from '@/components/chat/ChatEmptyState.vue'
 import ChatMessageList from '@/components/chat/ChatMessageList.vue'
+import SseDebugPanel from '@/components/dev/SseDebugPanel.vue'
 import { useChatSession } from '@/composables/useChatSession'
+
+/** 是否展示 SSE 调试面板，只在开发环境开启 */
+const showSseDebug = import.meta.env.DEV
 
 /** 对话页业务状态与动作，页面只负责布局与组件串联 */
 const {
@@ -77,6 +81,7 @@ watch(isStreaming, (streaming, previous) => {
 
         <div v-if="!loadError" class="chat-stage__composer">
           <p v-if="isCreating" class="chat-stage__status">正在创建对话...</p>
+          <SseDebugPanel v-if="showSseDebug" />
           <ChatComposer
             ref="composerRef"
             v-model="draft"

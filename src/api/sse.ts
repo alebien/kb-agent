@@ -32,8 +32,13 @@ export interface SseMeta {
 
 /** 流式请求的事件回调 */
 export interface SseHandlers {
-  /** 收到一个完整事件；回调内抛错会中断整个流并让 Promise reject */
-  onEvent: (event: SseEvent, meta: SseMeta) => void
+  /**
+   * 收到一个完整事件；回调内抛错会中断整个流并让 Promise reject
+   * 返回 true 表示业务已拿到结束信号，立即停止读取并释放连接
+   */
+  onEvent: (event: SseEvent, meta: SseMeta) => boolean | void
+  /** 收到一条原始事件文本，便于开发环境观察协议细节；回调内抛错会中断整个流 */
+  onRawEvent?: (raw: string) => void
   /** 响应头已返回且确认是事件流，适合在这里收起 loading 态 */
   onOpen?: (response: Response) => void
 }
@@ -158,17 +163,19 @@ export async function streamSse(
   /** 最近一次收到的事件 id，随每个事件回调出去 */
   let lastEventId = ''
 
-  /** 解析并分发一段事件原文 */
-  const dispatch = (raw: string) => {
+  /** 解析并分发一段事件原文，返回 true 表示调用方要求停止读取 */
+  const dispatch = (raw: string): boolean => {
+    handlers.onRawEvent?.(raw)
+
     /** 本次解析出的事件 */
     const parsed = parseEventBlock(raw)
     if (!parsed) {
-      return
+      return false
     }
     if (parsed.id) {
       lastEventId = parsed.id
     }
-    handlers.onEvent(parsed, { lastEventId })
+    return handlers.onEvent(parsed, { lastEventId }) === true
   }
 
   /** UTF-8 解码器，stream 选项保证多字节字符不会被 chunk 边界切坏 */
@@ -177,6 +184,8 @@ export async function streamSse(
   const reader = response.body.getReader()
   /** 跨 chunk 的残留文本，事件被切开时先留在这里 */
   let buffer = ''
+  /** 业务是否已声明结束，用于 done 后立即断开而不是等网关关连接 */
+  let stopRequested = false
 
   try {
     while (true) {
@@ -195,7 +204,16 @@ export async function streamSse(
         /** 分隔符之前的完整事件原文 */
         const rawEvent = buffer.slice(0, match.index)
         buffer = buffer.slice(match.index + match[0].length)
-        dispatch(rawEvent)
+        if (dispatch(rawEvent)) {
+          stopRequested = true
+          break
+        }
+      }
+
+      // 收到结束信号后不再继续读，主动取消响应体以释放连接
+      if (stopRequested) {
+        await reader.cancel().catch(() => undefined)
+        return
       }
     }
 

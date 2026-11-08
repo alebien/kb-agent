@@ -12,6 +12,7 @@ import {
 import type { AgentMessage, Conversation, UserMessage } from '@/domain'
 import { useAuthStore } from '@/stores/auth'
 import { useConversationStore } from '@/stores/conversations'
+import { resetSseDebugEntries } from '@/dev/sse-debug'
 
 /** 加载态延迟显示时间，快速返回时不闪现 loading */
 const LOADING_DELAY_MS = 800
@@ -232,6 +233,8 @@ export function useChatSession() {
 
     isStreaming.value = true
     draft.value = ''
+    // 每轮提问单独记录事件，避免上一轮日志混进本轮观察
+    resetSseDebugEntries()
 
     try {
       /** 发送接口返回的会话摘要与助手消息 id */
@@ -351,6 +354,8 @@ export function useChatSession() {
 
     isStreaming.value = true
     activeAnswerId.value = message.id
+    // 重试同样开启新的一轮事件记录
+    resetSseDebugEntries()
 
     try {
       await regenerateMessage(conversation.summary.id, message.id, {
@@ -424,7 +429,16 @@ export function useChatSession() {
 
   watch(
     () => route.fullPath,
-    () => {
+    async () => {
+      // 切换会话或回到草稿页时中止旧流，避免上一轮回答继续占用生成状态
+      if (isStreaming.value && activeAnswerId.value && activeConversationId.value) {
+        try {
+          await stopMessage(activeConversationId.value, activeAnswerId.value)
+        } catch {
+          // 会话可能已被删除，停止失败不阻塞路由切换
+        }
+      }
+
       draft.value = ''
 
       if (isDraft.value) {

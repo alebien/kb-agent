@@ -273,7 +273,7 @@ export function mockSseServer(): Plugin {
         const answerId = typeof body.answerId === 'string' ? body.answerId : ''
         /** 解析后的请求地址，通过 query 开关演示场景与分片粒度 */
         const requestUrl = new URL(request.url ?? MOCK_STREAM_PATH, 'http://localhost')
-        /** 演示场景，broken 表示模拟中途断流 */
+        /** 演示场景，broken 模拟中途断流，keep-alive 模拟 done 后保持连接 */
         const scenario = requestUrl.searchParams.get('scenario')
         /** 本次回答的分片大小，?chunkSize=20 可模拟真实模型一次吐一大段 */
         const chunkSize = normalizeChunkSize(requestUrl.searchParams.get('chunkSize'))
@@ -384,6 +384,11 @@ export function mockSseServer(): Plugin {
             durationMs: Date.now() - startedAt,
             tokens: content.length,
           })
+
+          // 演示真实网关常见的长连接行为：done 之后连接仍保持一段时间
+          if (scenario === 'keep-alive') {
+            await sleep(1500)
+          }
         } finally {
           clearInterval(heartbeat)
           writer.close()
