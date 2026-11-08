@@ -125,7 +125,8 @@
   border-radius: 6px;
 }
 
-.markdown-body.is-streaming > :last-child::after {
+/* 弃用光标 */
+/* .markdown-body.is-streaming > :last-child::after {
   display: inline-block;
   width: 6px;
   height: 1em;
@@ -134,7 +135,7 @@
   background: var(--el-color-primary);
   animation: markdown-cursor 1s steps(1) infinite;
   content: '';
-}
+} */
 
 /* 流式新增的字符单独淡入，缓解整块替换造成的跳字感 */
 .markdown-body.is-streaming .markdown-stream-chunk {

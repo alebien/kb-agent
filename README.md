@@ -46,10 +46,13 @@
 ## 目录结构
 
 ```text
+dev/
+└── mock-sse-server.ts      # 开发环境的 SSE 端点，提供真实流式演示
 src/
 ├── api/                    # 模拟接口层，接入真实后端时只改这里
 │   ├── auth.ts             # 登录、登出、会话恢复
 │   ├── conversations.ts    # 会话与消息流
+│   ├── sse.ts              # SSE 解析与流式传输，不含业务
 │   ├── knowledge-bases.ts  # 知识库列表（固定 5 条）
 │   ├── documents.ts        # 文档列表，MVP 外保留
 │   ├── eval-cases.ts       # 评测用例，MVP 外保留
@@ -104,6 +107,41 @@ src/
 - `ConversationInsightPanel.vue` 保留但不挂载，`ChatView` 不引用
 - `src/auth/permissions.ts` 与 `src/directives/permission.ts` 保留代码，单角色下不参与路由、菜单与按钮判定
 - `/dev/markdown` 只在开发环境注册
+
+## 流式实现（SSE）
+
+回答现在是真实的 `text/event-stream`，不是前端定时器伪造的假流：
+
+- `src/api/sse.ts`：传输层。用 `fetch` + `ReadableStream` 手写解析，按空行切事件，兼容 `\r\n`、跨 chunk 分包与结尾缺空行；不用 `EventSource`，因为需要 POST 请求体、自定义请求头与 `AbortController`
+- `src/api/conversations.ts`：业务层。`runAnswerStream` 消费事件写消息，`stopMessage` 通过 `abort()` 直接关闭连接，已生成内容保留
+- `dev/mock-sse-server.ts`：开发端点。Vite 插件的 connect 中间件，只在 `pnpm dev` 下提供 `POST /api/dev/sse/chat`，接真实后端时删掉插件、改掉 `STREAM_URL` 即可
+
+事件约定：
+
+| 事件 | 负载 | 说明 |
+| --- | --- | --- |
+| `start` | `{ answerId, model, createdAt }` | 建连成功 |
+| `tool` | `ToolCall` | 同一个 id 先推 `running` 再推 `success` |
+| `citation` | `Citation` | 可多次，前端按 id 覆盖 |
+| `delta` | `{ text }` | 增量正文，前端追加 |
+| `done` | `{ confidence, model, durationMs, tokens }` | 收尾统计 |
+| `error` | `{ message }` | 生成中途失败，前端走失败态 |
+
+自测原始报文：
+
+```sh
+pnpm dev
+curl -N -X POST http://localhost:5173/api/dev/sse/chat \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"发票怎么换开","answerId":"demo"}'
+```
+
+`-N` 关闭 curl 缓冲，能逐条看到事件与 `: ping` 心跳。另外两个 query 开关：
+
+- `?scenario=broken`：生成到 40% 时断开，用来验证错误态
+- `?chunkSize=20`：每帧字符数（默认 6），改它只变颗粒度、不变总耗时，可对比「细腻打字机」与「整段蹦出」两种体感
+
+注意：SSE 端点只在 `pnpm dev` 下存在，`pnpm preview` 静态预览时发送消息会走失败分支。
 
 ## 开发命令
 

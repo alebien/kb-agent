@@ -9,6 +9,7 @@ import type {
 import { conversations, defaultConversationId } from '@/mock/conversations'
 import { toLocalIsoString } from '@/utils/datetime'
 import { useAuthStore } from '@/stores/auth'
+import { readEventData, streamSse } from './sse'
 
 /** 会话不存在或不属于当前登录人时抛出的错误码，前端统一映射为同一句提示 */
 export const CONVERSATION_FORBIDDEN_CODE = 'FORBIDDEN_CONVERSATION'
@@ -62,126 +63,6 @@ function delay<T>(value: T, milliseconds = 280): Promise<T> {
   return new Promise((resolve) => {
     window.setTimeout(() => resolve(value), milliseconds)
   })
-}
-
-/** 生成助手回答的 Markdown mock 内容，按提问关键词返回不同业务场景 */
-function buildAnswerContent(prompt: string): string {
-  /** 归一化后的提问，便于匹配关键词 */
-  const normalized = prompt.toLowerCase()
-
-  if (normalized.includes('发票')) {
-    return `## 发票处理建议
-
-已为你检索到发票相关规则，可以先按下面步骤确认：
-
-1. 核对开票主体与税号是否正确
-2. 电子普票在开具后 **30 天内** 可申请换开
-3. 跨月换开需要先红冲原发票
-
-> 如果订单已报销，请先确认财务是否接受红冲后的新票
-
-| 场景 | 处理方式 |
-| --- | --- |
-| 抬头错误 | 申请换开 |
-| 金额错误 | 红冲后重开 |
-| 超过 30 天 | 转人工审核 |
-
-需要我继续帮你查询具体订单的发票状态吗？`
-  }
-
-  if (normalized.includes('物流') || normalized.includes('快递')) {
-    return `## 物流异常排查
-
-可以按以下顺序确认包裹状态：
-
-1. 查看物流轨迹是否超过 **48 小时** 未更新
-2. 核对收件地址与联系电话是否完整
-3. 联系承运方确认是否发生分拣异常
-
-如果确认丢件，可以提交工单并附上订单号，客服会在 **4 小时内** 首次响应
-
-> 涉及赔付时，请保留物流截图与商品价值凭证`
-  }
-
-  if (normalized.includes('会员') || normalized.includes('积分')) {
-    return `## 会员权益说明
-
-当前会员等级按近 **12 个月** 的实付金额计算，权益包含：
-
-- 专属客服通道
-- 生日双倍积分
-- 每月免运费券
-
-积分有效期为获取后 **24 个月**，过期前 30 天会通过站内信提醒`
-  }
-
-  return `## 处理结论
-
-已结合企业知识库检索「${prompt}」，建议先确认订单状态与适用政策：
-
-1. 核对订单是否在售后时效内
-2. 确认商品当前状态与凭证是否齐全
-3. 按对应政策提交申请并保留沟通记录
-
-> 若涉及金额变更或发票重开，建议转人工复核
-
-| 项目 | 说明 |
-| --- | --- |
-| 处理时效 | 1 个工作日内 |
-| 退款路径 | 原路退回 |
-| 人工介入 | 涉及金额变更时 |
-
-如需继续处理，请补充订单号。`
-}
-
-/** 将长回答切成适合逐字追加的片段，模拟 SSE 增量文本 */
-function splitAnswer(content: string): string[] {
-  /** 每个片段包含的字符数，越小流式效果越细腻 */
-  const chunkSize = 3
-  /** 切片后的文本片段 */
-  const chunks: string[] = []
-
-  for (let index = 0; index < content.length; index += chunkSize) {
-    chunks.push(content.slice(index, index + chunkSize))
-  }
-
-  return chunks
-}
-
-/** 动态回答完成后的演示数据，统一限制为单一检索工具，避免页面出现无来源的耗时 */
-function buildLiveAnswerTrace(
-  answerId: string,
-  prompt: string,
-): { citations: Citation[]; toolCalls: ToolCall[]; durationMs: number; confidence: number } {
-  /** 本次模拟检索耗时 */
-  const durationMs = 260
-
-  return {
-    citations: [
-      {
-        id: `${answerId}-citation`,
-        documentId: '9f2c4e1a-7b3d-4c8f-a1e6-2d5b8c0f4a71',
-        knowledgeBaseId: 'kb_aftersale',
-        name: '售后退款政策_v2.pdf',
-        description: '售后政策库 · 更新于 2026-10-20',
-        snippet: '符合本场景的用户，可在签收后 7 天内提交申请，审核通过后原路退回',
-        page: 12,
-        score: 0.92,
-      },
-    ],
-    toolCalls: [
-      {
-        id: `${answerId}-search`,
-        name: 'search_knowledge',
-        arguments: { query: prompt, top_k: 5 },
-        status: 'success',
-        result: { hits: 1, topScore: 0.92 },
-        durationMs,
-      },
-    ],
-    durationMs,
-    confidence: 88,
-  }
 }
 
 /**
@@ -694,6 +575,143 @@ function notifyConversationUpdate(conversation: Conversation, handlers: AnswerSt
   handlers.onUpdate?.(snapshotMessages(conversation.messages))
 }
 
+/** 流式接口地址，开发环境由 dev/mock-sse-server.ts 提供，接真实后端时改这里 */
+const STREAM_URL = '/api/dev/sse/chat'
+
+/** 服务端推送的事件负载，字段与 dev/mock-sse-server.ts 保持一致 */
+interface StreamPayload {
+  /** delta 事件的增量文本 */
+  text?: string
+  /** 回答置信度，0-100 整数 */
+  confidence?: number
+  /** 生成该消息的模型名称 */
+  model?: string
+  /** 本次回答耗时，单位毫秒 */
+  durationMs?: number
+  /** 本次回答消耗的 token 数 */
+  tokens?: number
+  /** error 事件的错误说明 */
+  message?: string
+}
+
+/** 按 id 覆盖写入列表项，工具调用会先推 running 再推 success */
+function upsertById<T extends { id: string }>(list: T[], item: T): void {
+  /** 已存在项的下标，-1 表示还没写入过 */
+  const index = list.findIndex((current) => current.id === item.id)
+  if (index === -1) {
+    list.push(item)
+    return
+  }
+
+  list.splice(index, 1, item)
+}
+
+/**
+ * 把一次真实的 SSE 回答写进会话
+ *
+ * sendMessage 与 regenerateMessage 共用这段流程，区别只在调用前如何准备消息
+ * 事件约定：start → tool(running) → citation → tool(success) → delta… → done
+ *
+ * @param conversation 当前会话，流式过程中会被就地修改
+ * @param answer 正在生成的助手消息，调用前需已加入消息列表
+ * @param prompt 本轮提问，作为请求体发给服务端
+ * @param handlers 页面回调，与接口签名保持一致
+ */
+async function runAnswerStream(
+  conversation: Conversation,
+  answer: AgentMessage,
+  prompt: string,
+  handlers: AnswerStreamHandlers,
+): Promise<void> {
+  /** 当前回答的停止控制器，abort 会直接关闭底层连接 */
+  const controller = new AbortController()
+  answerControllers.set(answer.id, controller)
+  handlers.onStart?.(answer.id)
+
+  /** 流式开始时间，服务端没回 durationMs 时用它兜底 */
+  const startedAt = Date.now()
+
+  try {
+    await streamSse(
+      STREAM_URL,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, answerId: answer.id }),
+      },
+      {
+        onEvent: (event) => {
+          switch (event.event) {
+            case 'delta': {
+              /** 增量文本，追加后只把这一小段回传页面 */
+              const text = readEventData<StreamPayload>(event).text ?? ''
+              answer.content += text
+              // 流式过程中只回传增量，避免每个 chunk 都深拷贝整条消息列表
+              handlers.onChunk(text)
+              break
+            }
+            case 'citation':
+              upsertById(answer.citations, readEventData<Citation>(event))
+              break
+            case 'tool':
+              upsertById(answer.toolCalls, readEventData<ToolCall>(event))
+              break
+            case 'error':
+              // 服务端在流中途报错，抛出去走统一失败分支，已生成内容保留
+              throw new Error(readEventData<StreamPayload>(event).message ?? '回答生成失败')
+            case 'done': {
+              /** 收尾统计信息 */
+              const payload = readEventData<StreamPayload>(event)
+              answer.confidence = payload.confidence
+              answer.model = payload.model
+              answer.durationMs = payload.durationMs ?? Date.now() - startedAt
+              conversation.confidence = payload.confidence ?? null
+              conversation.stats.duration += answer.durationMs
+              conversation.stats.tokens += payload.tokens ?? 0
+              break
+            }
+            default:
+              // 未知事件先忽略，方便后端先上线新事件、前端再逐步支持
+              break
+          }
+        },
+      },
+      { signal: controller.signal },
+    )
+
+    // 服务端正常关闭连接，视为回答完成
+    answer.status = 'completed'
+    answer.completedAt = toLocalIsoString(new Date())
+    answer.durationMs ??= Date.now() - startedAt
+    conversation.stats.citations = conversation.messages.reduce(
+      (count, message) => count + (message.role === 'agent' ? message.citations.length : 0),
+      0,
+    )
+    touchConversation(conversation, 'completed')
+    notifyConversationUpdate(conversation, handlers)
+    handlers.onDone(answer)
+  } catch (error) {
+    // 主动停止属于预期行为，保留已生成内容
+    if (controller.signal.aborted) {
+      answer.status = 'stopped'
+      answer.completedAt = toLocalIsoString(new Date())
+      touchConversation(conversation, 'completed')
+      notifyConversationUpdate(conversation, handlers)
+      handlers.onStopped(answer)
+      return
+    }
+
+    answer.status = 'failed'
+    answer.error = error instanceof Error ? error.message : '生成失败'
+    answer.completedAt = toLocalIsoString(new Date())
+    touchConversation(conversation, 'failed')
+    notifyConversationUpdate(conversation, handlers)
+    handlers.onError(answer)
+  } finally {
+    answerControllers.delete(answer.id)
+  }
+}
+
 /** 发送一条用户提问时返回的结果 */
 export interface SendMessageResult {
   /** 会话最新的摘要，更新时间已刷新 */
@@ -703,8 +721,8 @@ export interface SendMessageResult {
 }
 
 /**
- * 发送用户消息并以 mock 定时器模拟 SSE 增量输出
- * `onChunk` 只负责把增量文本追加到 UI，完整消息仍在接口结束时回传
+ * 发送用户消息并消费服务端推送的 SSE 流
+ * `onChunk` 只负责把增量文本追加到 UI，引用、工具调用与统计信息在流中陆续补齐
  */
 export async function sendMessage(
   id: string,
@@ -760,71 +778,8 @@ export async function sendMessage(
   touchConversation(conversation, 'processing')
   notifyConversationUpdate(conversation, handlers)
 
-  /** 当前回答的停止控制器 */
-  const controller = new AbortController()
-  answerControllers.set(answerId, controller)
-  handlers.onStart?.(answerId)
-
-  /** 本次回答的完整 Markdown 内容 */
-  const fullContent = buildAnswerContent(prompt)
-  /** 切片后的增量文本 */
-  const chunks = splitAnswer(fullContent)
-
-  try {
-    for (const chunk of chunks) {
-      if (controller.signal.aborted) {
-        answer.status = 'stopped'
-        answer.completedAt = toLocalIsoString(new Date())
-        touchConversation(conversation, 'completed')
-        notifyConversationUpdate(conversation, handlers)
-        handlers.onStopped(answer)
-        return { summary: { ...conversation.summary }, answerId }
-      }
-
-      // 模拟每个 SSE 事件间隔，长回答可被用户中途停止
-      await delay(undefined, 24)
-      // 停止可能发生在等待期间，此时不再追加新片段
-      if (controller.signal.aborted) {
-        answer.status = 'stopped'
-        answer.completedAt = toLocalIsoString(new Date())
-        touchConversation(conversation, 'completed')
-        notifyConversationUpdate(conversation, handlers)
-        handlers.onStopped(answer)
-        return { summary: { ...conversation.summary }, answerId }
-      }
-      answer.content += chunk
-      // 流式过程中只回传增量，避免每个 chunk 都深拷贝并替换整条消息列表
-      handlers.onChunk(chunk)
-    }
-
-    answer.status = 'completed'
-    answer.completedAt = toLocalIsoString(new Date())
-    /** 本次回答完成后的引用、工具调用与置信度 */
-    const trace = buildLiveAnswerTrace(answerId, prompt)
-    answer.citations = trace.citations
-    answer.toolCalls = trace.toolCalls
-    answer.confidence = trace.confidence
-    answer.durationMs = trace.durationMs
-    conversation.confidence = trace.confidence
-    conversation.stats.duration += 1200
-    conversation.stats.tokens += fullContent.length
-    conversation.stats.citations = conversation.messages.reduce(
-      (count, message) => count + (message.role === 'agent' ? message.citations.length : 0),
-      0,
-    )
-    touchConversation(conversation, 'completed')
-    notifyConversationUpdate(conversation, handlers)
-    handlers.onDone(answer)
-  } catch (error) {
-    answer.status = 'failed'
-    answer.error = error instanceof Error ? error.message : '生成失败'
-    answer.completedAt = toLocalIsoString(new Date())
-    touchConversation(conversation, 'failed')
-    notifyConversationUpdate(conversation, handlers)
-    handlers.onError(answer)
-  } finally {
-    answerControllers.delete(answerId)
-  }
+  // 建连、收事件、收尾状态都交给统一流程处理
+  await runAnswerStream(conversation, answer, prompt, handlers)
 
   return { summary: { ...conversation.summary }, answerId }
 }
@@ -899,68 +854,8 @@ export async function regenerateMessage(
   touchConversation(conversation, 'processing')
   notifyConversationUpdate(conversation, handlers)
 
-  /** 当前重试请求的停止控制器 */
-  const controller = new AbortController()
-  answerControllers.set(answerId, controller)
-  handlers.onStart?.(answerId)
-
-  /** 重试时重新生成的内容 */
-  const fullContent = buildAnswerContent(prompt)
-  /** 重试内容切片 */
-  const chunks = splitAnswer(fullContent)
-
-  try {
-    for (const chunk of chunks) {
-      if (controller.signal.aborted) {
-        answer.status = 'stopped'
-        answer.completedAt = toLocalIsoString(new Date())
-        touchConversation(conversation, 'completed')
-        notifyConversationUpdate(conversation, handlers)
-        handlers.onStopped(answer)
-        return
-      }
-
-      await delay(undefined, 24)
-      // 停止可能发生在等待期间，此时不再追加新片段
-      if (controller.signal.aborted) {
-        answer.status = 'stopped'
-        answer.completedAt = toLocalIsoString(new Date())
-        touchConversation(conversation, 'completed')
-        notifyConversationUpdate(conversation, handlers)
-        handlers.onStopped(answer)
-        return
-      }
-      answer.content += chunk
-      // 流式过程中只回传增量，避免每个 chunk 都深拷贝并替换整条消息列表
-      handlers.onChunk(chunk)
-    }
-
-    answer.status = 'completed'
-    answer.completedAt = toLocalIsoString(new Date())
-    /** 重试完成后的引用、工具调用与置信度 */
-    const retriedTrace = buildLiveAnswerTrace(answerId, prompt)
-    answer.citations = retriedTrace.citations
-    answer.toolCalls = retriedTrace.toolCalls
-    answer.confidence = retriedTrace.confidence
-    answer.durationMs = retriedTrace.durationMs
-    conversation.confidence = retriedTrace.confidence
-    conversation.stats.citations = conversation.messages.reduce(
-      (count, message) => count + (message.role === 'agent' ? message.citations.length : 0),
-      0,
-    )
-    touchConversation(conversation, 'completed')
-    notifyConversationUpdate(conversation, handlers)
-    handlers.onDone(answer)
-  } catch (error) {
-    answer.status = 'failed'
-    answer.error = error instanceof Error ? error.message : '生成失败'
-    answer.completedAt = toLocalIsoString(new Date())
-    touchConversation(conversation, 'failed')
-    notifyConversationUpdate(conversation, handlers)
-    handlers.onError(answer)
-  } finally {
-    answerControllers.delete(answerId)
-  }
+  // 重试与首次发送共用同一套流式流程，只是消息位置不同
+  await runAnswerStream(conversation, answer, prompt, handlers)
 }
 
 /** 创建新会话时返回的摘要与完整详情 */

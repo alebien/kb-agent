@@ -253,10 +253,11 @@ export function useChatSession() {
             activeAnswerId.value = ''
             ElMessage.info('已停止生成')
           },
-          onError: () => {
+          onError: (message) => {
             isStreaming.value = false
             activeAnswerId.value = ''
-            ElMessage.error('回答生成失败，请重试')
+            // 服务端可能在流中途给出具体原因，优先展示它
+            ElMessage.error(message.error || '回答生成失败，请重试')
           },
         },
         reuseUserMessageId ? { reuseUserMessageId } : undefined,
@@ -367,10 +368,11 @@ export function useChatSession() {
           activeAnswerId.value = ''
           ElMessage.info('已停止生成')
         },
-        onError: () => {
+        onError: (message) => {
           isStreaming.value = false
           activeAnswerId.value = ''
-          ElMessage.error('重新生成失败，请稍后重试')
+          // 服务端可能在流中途给出具体原因，优先展示它
+          ElMessage.error(message.error || '重新生成失败，请稍后重试')
         },
       })
     } catch {
