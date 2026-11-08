@@ -240,15 +240,15 @@ watch(
       />
 
       <div class="message-actions">
-        <MessageActionButton
+        <!-- <MessageActionButton
           v-if="isStreaming"
           label="停止生成"
           icon="stop"
           danger
           @click="emit('stop', message)"
-        />
+        /> -->
 
-        <template v-else>
+        <template v-if="!isStreaming">
           <el-dropdown trigger="hover" placement="top-start" @command="handleCopyCommand">
             <button type="button" class="message-action" aria-label="复制" title="复制">
               <MessageActionIcon name="copy" />
