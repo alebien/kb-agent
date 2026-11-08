@@ -1,17 +1,11 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  ConversationForbiddenError,
-  deleteConversation,
-  renameConversation,
-} from '@/api/conversations'
+import { onMounted, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useConversationStore } from '@/stores/conversations'
-import { debounce } from '@/utils/debounce'
+import { useConversationActions } from '@/composables/useConversationActions'
+import { useSidebarLayout } from '@/composables/useSidebarLayout'
+import { useSidebarNavigation } from '@/composables/useSidebarNavigation'
 import ConversationList from './ConversationList.vue'
-import { CONVERSATION_MENU_ACTIONS, type ConversationActionKey } from './conversationMenu'
 import type { ConversationSummary } from '@/domain'
 
 /** 侧边栏的受控状态 */
@@ -28,240 +22,59 @@ const emit = defineEmits<{
   'toggle-collapse': []
 }>()
 
-/** 当前路由信息 */
-const route = useRoute()
-/** 路由实例，用于菜单跳转 */
-const router = useRouter()
 /** 登录状态 store，账号变化时重新拉取会话列表，避免跨账号缓存 */
 const authStore = useAuthStore()
 /** 会话列表 store，提供最近对话数据 */
 const conversationStore = useConversationStore()
-/** 是否正在播放开关动画，用于临时启用过渡效果 */
-const isAnimating = ref(false)
-/** 当前视口是否处于移动端断点 */
-const isMobile = ref(typeof window !== 'undefined' && window.innerWidth <= 900)
-/** 侧边栏开关动画的结束定时器 */
-let animationTimer: ReturnType<typeof setTimeout> | undefined
-/** 断点切换时置为 true，用于跳过下一次滑出动画 */
-let skipNextAnimation = false
 
-/** 当前高亮的菜单项，草稿页高亮「新对话」 */
-const activeMenu = computed(() => {
-  if (route.name === 'chat-draft') {
-    return 'new-chat'
-  }
+/** 菜单高亮、会话高亮与路由跳转 */
+const {
+  activeMenu,
+  activeConversationId,
+  conversationActions,
+  goToNewChat,
+  handleMenuSelect,
+  openConversation,
+} = useSidebarNavigation()
 
-  return route.path
-})
-/** 当前打开的会话 id，用于最近对话列表高亮 */
-const activeConversationId = computed(() => {
-  const id = route.params.conversationId
-  return typeof id === 'string' ? id : ''
-})
-/** 最近对话的更多操作，MVP 单角色下重命名与删除均对会话创建人开放 */
-const conversationActions = CONVERSATION_MENU_ACTIONS
-/** 侧边栏折叠按钮的图标路径，根据折叠状态切换方向 */
-const toggleIcon = computed(() => {
-  /** 是否处于可展开状态 */
-  const canExpand = props.collapsed && !isMobile.value
-  return canExpand ? 'M9 18l6-6-6-6' : 'M15 18l-6-6 6-6'
-})
-/** 折叠按钮的无障碍提示文案 */
-const toggleLabel = computed(() => {
-  if (isMobile.value) {
-    return '关闭导航'
-  }
-
-  return props.collapsed ? '展开侧边栏' : '收起侧边栏'
+/** 移动端抽屉、桌面端折叠与断点监听 */
+const { isAnimating, isMobile, toggleIcon, toggleLabel, close, toggleAside } = useSidebarLayout({
+  isOpen: () => props.open,
+  isCollapsed: () => props.collapsed,
+  onClose: () => emit('close'),
+  onToggleCollapse: () => emit('toggle-collapse'),
 })
 
-watch(
-  () => props.open,
-  () => {
-    // 断点切换会主动收起侧边栏，这时不播放滑出动画，避免闪动
-    if (skipNextAnimation) {
-      skipNextAnimation = false
-      stopAnimation()
-      return
-    }
-
-    isAnimating.value = true
-
-    if (animationTimer !== undefined) {
-      clearTimeout(animationTimer)
-    }
-
-    animationTimer = setTimeout(() => {
-      isAnimating.value = false
-    }, 300)
-  },
-)
-
-function stopAnimation() {
-  if (animationTimer !== undefined) {
-    clearTimeout(animationTimer)
-    animationTimer = undefined
-  }
-
-  isAnimating.value = false
-}
-
-/** 请求父组件关闭移动端侧边栏 */
-function close() {
-  emit('close')
-}
-
-/** 移动端点击按钮关闭抽屉，桌面端切换折叠状态 */
-function toggleAside() {
-  if (isMobile.value) {
-    close()
-    return
-  }
-
-  emit('toggle-collapse')
-}
-
-/** 处理侧边栏菜单选中，关闭抽屉并跳转到对应路由 */
-async function handleMenuSelect(index: string) {
-  close()
-
-  if (index === 'new-chat') {
-    await router.push({ name: 'chat-draft' })
-    return
-  }
-
-  await router.push(index)
-}
+/** 最近对话的重命名与删除 */
+const { handleConversationAction } = useConversationActions({
+  activeConversationId: () => activeConversationId.value,
+  onDeletedActive: goToNewChat,
+})
 
 /** 重新拉取最近对话，供列表错误态的重试按钮调用 */
 function retryLoadConversations() {
   void conversationStore.load(true)
 }
 
-/** 空态快捷新建对话，复用菜单跳转逻辑 */
+/** 空态快捷新建对话，先收起移动端抽屉再跳转 */
 async function createNewChat() {
   close()
-  await router.push({ name: 'chat-draft' })
+  await goToNewChat()
 }
 
 /** 打开最近对话并收起移动端侧边栏 */
 async function selectConversation(conversation: ConversationSummary) {
   close()
-  await router.push(`/chat/${conversation.id}`)
+  await openConversation(conversation)
 }
 
-/** 把接口异常转换成可展示文案，归属失败统一提示会话不存在或无权访问 */
-function getActionErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof ConversationForbiddenError ? error.message : fallback
-}
-
-/** 执行最近对话的操作，新增操作时在这里扩展分支 */
-async function handleConversationAction(
-  action: ConversationActionKey,
-  conversation: ConversationSummary,
-) {
-  if (action === 'rename') {
-    await renameConversationItem(conversation)
-    return
-  }
-
-  await deleteConversationItem(conversation)
-}
-
-/** 重命名会话，接口层会再次校验会话归属 */
-async function renameConversationItem(conversation: ConversationSummary) {
-  /** ElMessageBox 返回的新名称 */
-  let nextTitle: string
-
-  try {
-    /** 重命名弹窗的确认结果 */
-    const result = await ElMessageBox.prompt('请输入新的对话名称', '重命名对话', {
-      confirmButtonText: '保存',
-      cancelButtonText: '取消',
-      inputValue: conversation.title,
-      inputPlaceholder: '对话名称',
-      inputValidator: (value: string) => {
-        /** 去除首尾空白后的名称 */
-        const title = value.trim()
-        if (!title) {
-          return '名称不能为空'
-        }
-        if (title.length > 40) {
-          return '名称最多 40 个字符'
-        }
-        return true
-      },
-    })
-    nextTitle = result.value.trim()
-  } catch {
-    return
-  }
-
-  try {
-    /** 接口返回的更新后摘要 */
-    const summary = await renameConversation(conversation.id, nextTitle)
-    conversationStore.updateTitle(summary.id, summary.title)
-    ElMessage.success('已重命名')
-  } catch (error) {
-    ElMessage.error(getActionErrorMessage(error, '重命名失败，请稍后重试'))
-  }
-}
-
-/** 删除会话，删除当前打开会话后回到新对话页 */
-async function deleteConversationItem(conversation: ConversationSummary) {
-  try {
-    await ElMessageBox.confirm(
-      `删除「${conversation.title}」后无法恢复，确定继续吗？`,
-      '删除对话',
-      {
-        type: 'warning',
-        confirmButtonText: '删除',
-        cancelButtonText: '取消',
-        confirmButtonClass: 'el-button--danger',
-      },
-    )
-  } catch {
-    return
-  }
-
-  try {
-    await deleteConversation(conversation.id)
-    conversationStore.remove(conversation.id)
-
-    if (activeConversationId.value === conversation.id) {
-      await router.push({ name: 'chat-draft' })
-    }
-
-    ElMessage.success('已删除对话')
-  } catch (error) {
-    ElMessage.error(getActionErrorMessage(error, '删除对话失败，请稍后重试'))
-  }
-}
-
-/** 按下 Esc 时关闭移动端侧边栏 */
-function handleKeydown(event: KeyboardEvent) {
-  if (props.open && event.key === 'Escape') {
-    close()
-  }
-}
-
-/** 防抖后的窗口尺寸处理：从移动端切回桌面端时收起抽屉 */
-const handleResize = debounce(() => {
-  if (window.innerWidth > 900 && props.open) {
-    skipNextAnimation = true
-    close()
-  }
-}, 150)
-
-/** 更新移动端标记并触发防抖的尺寸处理 */
-function handleViewportChange() {
-  isMobile.value = window.innerWidth <= 900
-  handleResize()
+/** 处理菜单选中，先收起移动端抽屉再跳转 */
+async function handleSelect(index: string) {
+  close()
+  await handleMenuSelect(index)
 }
 
 onMounted(() => {
-  window.addEventListener('keydown', handleKeydown)
-  window.addEventListener('resize', handleViewportChange)
   void conversationStore.load()
 })
 
@@ -275,16 +88,6 @@ watch(
     }
   },
 )
-
-onBeforeUnmount(() => {
-  if (animationTimer !== undefined) {
-    clearTimeout(animationTimer)
-  }
-
-  handleResize.cancel()
-  window.removeEventListener('keydown', handleKeydown)
-  window.removeEventListener('resize', handleViewportChange)
-})
 </script>
 
 <template>
@@ -320,7 +123,7 @@ onBeforeUnmount(() => {
     </div>
 
     <el-scrollbar class="aside-scroll">
-      <el-menu :default-active="activeMenu" class="aside-menu" @select="handleMenuSelect">
+      <el-menu :default-active="activeMenu" class="aside-menu" @select="handleSelect">
         <el-menu-item index="new-chat" :title="collapsed && !isMobile ? '新对话' : undefined">
           <svg class="menu-icon" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 5v14M5 12h14" />
