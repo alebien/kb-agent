@@ -40,6 +40,8 @@ let scrollFrame = 0
 let isProgrammaticScroll = false
 /** 消息内容尺寸观察器，内容异步变高时补一次贴底，避免被新内容顶开 */
 let resizeObserver: ResizeObserver | undefined
+/** 已渲染过的用户提问 id，用于识别新提问并强制回到底部 */
+const knownUserMessageIds = new Set<string>()
 
 /**
  * 把容器滚到底部并同步内部状态
@@ -148,10 +150,27 @@ function handleBackToBottom() {
   void scrollToBottom()
 }
 
-// 消息变化时仅在自动跟随开启时滚到底部，用户向上滚动后立即暂停
+// 新提问必须回到底部，其余消息变化仅在自动跟随开启时贴底，避免打断用户向上阅读
 watch(
   () => props.messages,
   () => {
+    /** 当前消息列表中是否存在尚未记录的用户提问 */
+    const hasNewUserMessage = props.messages.some(
+      (message) => message.role === 'user' && !knownUserMessageIds.has(message.id),
+    )
+
+    // 同步本轮用户提问，后续流式增量与消息替换不会重复触发强制贴底
+    for (const message of props.messages) {
+      if (message.role === 'user') {
+        knownUserMessageIds.add(message.id)
+      }
+    }
+
+    if (hasNewUserMessage) {
+      void scrollToBottom()
+      return
+    }
+
     if (isFollowing.value) {
       scheduleScrollToBottom()
     }
@@ -162,6 +181,14 @@ watch(
 onMounted(() => {
   const wrap = getScrollWrap()
   wrap?.addEventListener('scroll', updateScrollState, { passive: true })
+
+  // 记录首屏已有提问，避免打开历史会话时把旧消息误判成新提问
+  for (const message of props.messages) {
+    if (message.role === 'user') {
+      knownUserMessageIds.add(message.id)
+    }
+  }
+
   void scrollToBottom()
 
   // Markdown 渲染、代码高亮与图片加载都会异步改变高度，跟随期间需要补一次贴底
