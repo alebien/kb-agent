@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>第 6 步 · useChat 验证页</title>
+  </head>
+  <body>
+    <!--
+      第 6 步专用的验证页，只在 `pnpm dev` 下访问：
+        http://localhost:5173/usechat-demo.html
+      它不参与构建（vite build 只认 index.html），也不进 router，
+      所以和 src/composables/useChat.ts 一起删掉不会影响业务代码
+    -->
+    <div id="app"></div>
+    <script type="module" src="/src/dev/usechat-demo/main.ts"></script>
+  </body>
+</html>
