@@ -1,4 +1,6 @@
+import { readFileSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { resolve } from 'node:path'
 import type { Plugin } from 'vite'
 
 /**
@@ -25,6 +27,33 @@ const HEARTBEAT_INTERVAL_MS = 1200
 
 /** 模拟检索工具的执行耗时 */
 const SEARCH_DELAY_MS = 360
+
+/** 长文本压测用的文档路径，相对项目根目录，只在开发服务器里读盘 */
+const LONG_ANSWER_PATH = 'dev/fixtures/long-answer.md'
+
+/** 长文本缓存，null 表示还没读过盘 */
+let longAnswerCache: string | null = null
+
+/**
+ * 读取长文本压测文档
+ *
+ * 压测必须用真实长文本：重复短句的 Markdown 解析成本远低于真文档，
+ * 拿它测出来的帧率没有参考价值。文档内容固定，读一次之后缓存起来
+ */
+function readLongAnswer(): string {
+  /** 缓存的文档正文，第二次请求起直接复用 */
+  const cached = longAnswerCache
+  if (cached !== null) {
+    return cached
+  }
+
+  /** 从项目根目录定位文档，pnpm dev 的工作目录就是项目根目录 */
+  const file = resolve(process.cwd(), LONG_ANSWER_PATH)
+  /** 读出来的正文，同时写进缓存 */
+  const text = readFileSync(file, 'utf8')
+  longAnswerCache = text
+  return text
+}
 
 /** 一次 SSE 响应的写入端，负责序列化事件并维护事件序号 */
 interface SseWriter {
@@ -71,6 +100,40 @@ function normalizeChunkSize(raw: string | null): number {
   }
 
   return Math.min(40, Math.max(1, Math.round(parsed)))
+}
+
+/**
+ * 归一化请求里的总时长
+ *
+ * 正文推完的目标耗时，压测时调大可以拉长观察窗口，方便在 Performance 面板里截取一段稳定区间
+ *
+ * @param raw query 里的原始值，缺省时用 TARGET_STREAM_MS
+ */
+function normalizeDuration(raw: string | null): number {
+  /** 解析后的数值，非数字按缺省处理 */
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return TARGET_STREAM_MS
+  }
+
+  return Math.min(60000, Math.max(200, Math.round(parsed)))
+}
+
+/**
+ * 归一化请求里的正文长度
+ *
+ * 0 表示不截断；压测时可以用 ?chars=10000 把长文本拉得更极端
+ *
+ * @param raw query 里的原始值，缺省时返回 0
+ */
+function normalizeChars(raw: string | null): number {
+  /** 解析后的数值，非数字按不截断处理 */
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 0
+  }
+
+  return Math.round(parsed)
 }
 
 /**
@@ -242,7 +305,9 @@ function buildCitation(prompt: string): Record<string, unknown> {
  * 提供 /api/dev/sse/chat 的 Vite 插件
  *
  * 支持 `?scenario=broken` 模拟生成中途断流，用来验证前端错误态；
- * 支持 `?chunkSize=N` 调整每帧字符数，用来对比不同颗粒度的流式体感
+ * 支持 `?scenario=long` 返回 dev/fixtures/long-answer.md 里的长文本，用来压测渲染；
+ * 支持 `?chunkSize=N` 调整每帧字符数，用来对比不同颗粒度的流式体感；
+ * 支持 `?durationMs=N` 调整正文推完的目标总时长，`?chars=N` 截断正文长度
  */
 export function mockSseServer(): Plugin {
   return {
@@ -269,14 +334,29 @@ export function mockSseServer(): Plugin {
 
         /** 用户提问，决定返回哪段演示文案 */
         const prompt = typeof body.prompt === 'string' ? body.prompt : ''
-        /** 前端生成的助手消息 id，原样回显便于对照日志 */
-        const answerId = typeof body.answerId === 'string' ? body.answerId : ''
+        /** 前端上屏时用的临时 id，原样回显便于对照日志；真实后端通常拿它做幂等键 */
+        const clientAnswerId = typeof body.answerId === 'string' ? body.answerId : ''
+        /** 服务端自己生成的消息 id，真实后端返回的是落库后的行 id，客户端要拿它替换临时 id */
+        const answerId = `srv-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
         /** 解析后的请求地址，通过 query 开关演示场景与分片粒度 */
         const requestUrl = new URL(request.url ?? MOCK_STREAM_PATH, 'http://localhost')
-        /** 演示场景，broken 模拟中途断流，keep-alive 模拟 done 后保持连接 */
+        /** 演示场景，broken 模拟中途断流，long 返回长文本，keep-alive 模拟 done 后保持连接 */
         const scenario = requestUrl.searchParams.get('scenario')
         /** 本次回答的分片大小，?chunkSize=20 可模拟真实模型一次吐一大段 */
         const chunkSize = normalizeChunkSize(requestUrl.searchParams.get('chunkSize'))
+        /** 本次回答的目标总时长，?durationMs=8000 可拉长压测窗口 */
+        const durationMs = normalizeDuration(requestUrl.searchParams.get('durationMs'))
+        /** 正文长度上限，0 表示不截断，?chars=10000 可加码压测 */
+        const chars = normalizeChars(requestUrl.searchParams.get('chars'))
+
+        // 模拟网关直接返回 500：响应头就是错的，前端根本进不了流式分支
+        // 用它验证「HTTP 错误不会触发 offline 事件」，只监听 online/offline 会漏
+        if (scenario === '500') {
+          response.statusCode = 500
+          response.setHeader('Content-Type', 'application/json; charset=utf-8')
+          response.end(JSON.stringify({ message: '模拟服务端 500' }))
+          return
+        }
 
         // 事件流必须显式声明 utf-8，否则浏览器可能按 latin-1 解码导致中文乱码
         response.writeHead(200, {
@@ -316,6 +396,7 @@ export function mockSseServer(): Plugin {
         try {
           writer.event('start', {
             answerId,
+            clientAnswerId,
             model: 'kb-agent-mock',
             createdAt: new Date(startedAt).toISOString(),
           })
@@ -348,14 +429,16 @@ export function mockSseServer(): Plugin {
             durationMs: SEARCH_DELAY_MS,
           })
 
-          /** 本次回答的完整正文 */
-          const content = buildAnswer(prompt)
+          /** 本次回答的完整正文：长文本场景读真实文档，其余按关键词匹配 */
+          const raw = scenario === 'long' ? readLongAnswer() : buildAnswer(prompt)
+          /** 按 chars 截断后的正文，0 表示不截断 */
+          const content = chars > 0 ? raw.slice(0, chars) : raw
           /** 切好的增量片段 */
           const chunks = splitText(content, chunkSize)
           /** 片段间隔按目标总时长摊开，分片变大时每条更厚但总耗时不变 */
           const interval = Math.max(
             MIN_CHUNK_INTERVAL_MS,
-            Math.round(TARGET_STREAM_MS / Math.max(1, chunks.length)),
+            Math.round(durationMs / Math.max(1, chunks.length)),
           )
           /** 断流场景在生成到 40% 时中断，其余场景为 -1 表示不中断 */
           const brokenAt = scenario === 'broken' ? Math.floor(chunks.length * 0.4) : -1
@@ -371,6 +454,9 @@ export function mockSseServer(): Plugin {
               return
             }
 
+            // 注意：Windows 下 Node 的 setTimeout 最小分辨率约 15.6ms，
+            // 6ms 的间隔实际会变成 15.6ms —— 长文本的真实流速因此是 64 条/秒左右，
+            // 一帧（16.7ms）里正好一条，这也是「按帧合并」在本地测不出收益的原因
             await sleep(interval)
             if (aborted) {
               return
