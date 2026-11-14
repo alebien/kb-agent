@@ -92,7 +92,7 @@ function handleConfirm() {
 </script>
 
 <template>
-  <el-dialog v-model="visible" title="转人工建单" width="460px" append-to-body>
+  <el-dialog v-model="visible" title="转人工建单" width="min(460px, 92vw)" append-to-body>
     <div class="ticket-form">
       <el-alert
         v-if="existingTicketCode"

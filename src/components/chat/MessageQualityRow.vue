@@ -130,8 +130,11 @@ const visibleSteps = computed(() =>
 .quality-row__summary {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   padding: 2px 0;
+  line-height: 1.6;
+  text-align: left;
   color: inherit;
   background: transparent;
   border: 0;

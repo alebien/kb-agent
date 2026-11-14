@@ -63,7 +63,7 @@ function submit() {
   }
 
   if (content.length > maxLength) {
-    ElMessage.warning(`单条消息最多 ${maxLength} 个字符`)
+    ElMessage.warning(`单条提问不超过 ${maxLength} 字`)
     return
   }
 
@@ -88,7 +88,7 @@ function handleInput(value: string) {
   model.value = nextValue
 
   if (value.length > maxLength) {
-    ElMessage.warning(`单条消息最多 ${maxLength} 个字符`)
+    ElMessage.warning(`单条提问不超过 ${maxLength} 字`)
   }
 }
 

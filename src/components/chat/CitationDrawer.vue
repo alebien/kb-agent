@@ -52,7 +52,13 @@ const chunkText = computed(() =>
 </script>
 
 <template>
-  <el-drawer v-model="visible" title="来源详情" size="420px" :destroy-on-close="true">
+  <el-drawer
+    v-model="visible"
+    title="来源详情"
+    size="min(420px, 92vw)"
+    class="citation-drawer"
+    :destroy-on-close="true"
+  >
     <div v-if="citation" class="citation-detail">
       <h3 class="citation-detail__title">{{ citation.name }}</h3>
 
@@ -92,6 +98,13 @@ const chunkText = computed(() =>
 </template>
 
 <style scoped>
+/* 窄屏兜底：部分 Element Plus 版本的 size 只接受数值，命中后强制收窄到视口 92% */
+@media (max-width: 420px) {
+  :global(.citation-drawer) {
+    width: 92vw !important;
+  }
+}
+
 .citation-detail {
   display: flex;
   flex-direction: column;

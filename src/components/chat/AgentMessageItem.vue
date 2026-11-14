@@ -20,13 +20,22 @@ const props = withDefaults(
   defineProps<{
     /** 助手消息数据 */
     message: AgentMessage
-    /** 是否为会话最后一条消息，只有最后一条允许重新生成 */
+    /** 是否为会话最后一组助手回答，只有该组允许重新生成 */
     canRetry?: boolean
+    /** 当前回答在版本组中的序号，从 1 开始 */
+    versionIndex?: number
+    /** 当前回答所属版本组的总版数 */
+    versionCount?: number
+    /** 当前回答是否为版本组内最新版，旧版不展示无引用兜底与转人工提示 */
+    isLatestVersion?: boolean
     /** 本轮转人工产生的工单号，用于展示已转人工提示 */
     ticketCode?: string
   }>(),
   {
     canRetry: false,
+    versionIndex: 1,
+    versionCount: 1,
+    isLatestVersion: true,
     ticketCode: '',
   },
 )
@@ -39,14 +48,20 @@ const emit = defineEmits<{
   stop: [message: AgentMessage]
   /** 请求删除该消息 */
   delete: [message: AgentMessage]
+  /** 请求切换回答版本，-1 为上一版，1 为下一版 */
+  'change-version': [direction: number]
 }>()
 
 /** 长消息折叠阈值，超过后默认只展示前 900 字，降低长 Markdown 渲染压力 */
 const COLLAPSE_THRESHOLD = 900
 /** 是否手动展开长消息 */
 const isExpanded = ref(false)
-/** 当前消息是否正在流式生成 */
+/** 当前消息是否已开始流式生成 */
 const isStreaming = computed(() => props.message.status === 'streaming')
+/** 当前消息是否处于等待首个增量或正在流式生成，两者都展示生成中的交互态 */
+const isGenerating = computed(
+  () => props.message.status === 'pending' || props.message.status === 'streaming',
+)
 /** 当前消息是否生成失败 */
 const isFailed = computed(() => props.message.status === 'failed')
 /** 当前消息是否已经产出完整结果 */
@@ -57,7 +72,7 @@ const isSettled = computed(
 /** 用于渲染的正文，未展开时按安全边界截断，避免切断代码块与表格 */
 const displayContent = computed(() => {
   // 生成中不折叠，避免回答在 900 字处突然停住，结束后再按折叠态展示
-  if (isExpanded.value || isStreaming.value) {
+  if (isExpanded.value || isGenerating.value) {
     return props.message.content
   }
 
@@ -69,7 +84,7 @@ const showExpandButton = computed(() => props.message.content.length > COLLAPSE_
 
 /** 折叠态提示文案，仅在生成结束后展示 */
 const showCollapsedHint = computed(
-  () => showExpandButton.value && !isExpanded.value && !isStreaming.value,
+  () => showExpandButton.value && !isExpanded.value && !isGenerating.value,
 )
 
 /** 是否展示工具调用区 */
@@ -77,12 +92,13 @@ const hasToolCalls = computed(() => props.message.toolCalls.length > 0)
 
 /** 是否展示置信度徽标，置信度为 null 时不展示 */
 const showConfidence = computed(
-  () => !isStreaming.value && typeof props.message.confidence === 'number',
+  () => !isGenerating.value && typeof props.message.confidence === 'number',
 )
 
 /** 无引用兜底：已产出结果、置信度存在且没有任何引用 */
 const showFallbackBanner = computed(
   () =>
+    props.isLatestVersion &&
     isSettled.value &&
     typeof props.message.confidence === 'number' &&
     !props.message.citations.length,
@@ -91,11 +107,19 @@ const showFallbackBanner = computed(
 /** 低置信度转人工提示 */
 const showHandoff = computed(
   () =>
-    !isStreaming.value &&
+    props.isLatestVersion &&
+    !isGenerating.value &&
     typeof props.message.confidence === 'number' &&
     props.message.confidence < 75 &&
     !!props.ticketCode,
 )
+
+/** 是否展示版本分页器，只有同组多版时才出现 */
+const showVersionPager = computed(() => props.versionCount > 1)
+/** 是否还能切到上一版 */
+const canGoPreviousVersion = computed(() => props.versionIndex > 1)
+/** 是否还能切到下一版 */
+const canGoNextVersion = computed(() => props.versionIndex < props.versionCount)
 
 /** 来源抽屉是否打开 */
 const citationVisible = ref(false)
@@ -184,7 +208,7 @@ watch(
       </div>
 
       <div
-        v-if="isStreaming && !message.content"
+        v-if="isGenerating && !message.content"
         class="agent-message__typing"
         aria-label="正在生成回答"
       >
@@ -248,7 +272,7 @@ watch(
           @click="emit('stop', message)"
         /> -->
 
-        <template v-if="!isStreaming">
+        <template v-if="!isGenerating">
           <el-dropdown trigger="hover" placement="top-start" @command="handleCopyCommand">
             <button type="button" class="message-action" aria-label="复制" title="复制">
               <MessageActionIcon name="copy" />
@@ -278,6 +302,28 @@ watch(
 
           <span v-if="showCollapsedHint" class="message-actions__hint">内容较长，已折叠</span>
         </template>
+
+        <div v-if="showVersionPager" class="message-version-pager" aria-label="回答版本切换">
+          <button
+            type="button"
+            class="message-action message-version-pager__arrow"
+            :disabled="!canGoPreviousVersion"
+            aria-label="上一版回答"
+            @click="emit('change-version', -1)"
+          >
+            ‹
+          </button>
+          <span class="message-version-pager__status"> {{ versionIndex }}/{{ versionCount }} </span>
+          <button
+            type="button"
+            class="message-action message-version-pager__arrow"
+            :disabled="!canGoNextVersion"
+            aria-label="下一版回答"
+            @click="emit('change-version', 1)"
+          >
+            ›
+          </button>
+        </div>
       </div>
     </div>
 
@@ -415,6 +461,38 @@ watch(
 .agent-message__meta-duration {
   color: var(--el-text-color-placeholder);
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.message-version-pager {
+  display: inline-flex;
+  margin-left: auto;
+  align-items: center;
+  gap: 2px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+/* 窄屏操作栏允许换行，避免分页器挤压复制、重试与删除按钮 */
+@media (max-width: 640px) {
+  .message-actions {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  .message-version-pager {
+    flex-shrink: 0;
+  }
+}
+
+.message-version-pager__arrow {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.message-version-pager__status {
+  min-width: 30px;
+  text-align: center;
   font-variant-numeric: tabular-nums;
 }
 

@@ -352,6 +352,11 @@ async function runAnswerStream(
         onEvent: (event) => {
           switch (event.event) {
             case 'delta': {
+              // 重试新增的占位消息直到首个增量才进入流式态，与 PRD 的首字状态迁移一致
+              if (answer.status === 'pending') {
+                answer.status = 'streaming'
+                notifyConversationUpdate(conversation, handlers)
+              }
               /** 增量文本，追加后只把这一小段回传页面 */
               const text = readEventData<StreamPayload>(event).text ?? ''
               answer.content += text
@@ -545,7 +550,7 @@ export async function deleteMessage(id: string, messageId: string): Promise<Mess
 
 /**
  * 重新生成一条助手回答
- * 先清空原回答保留消息位置，再按原提问重新流式生成，避免页面出现重复回答
+ * 原回答保持不动，在其后新增一条 pending 消息并按原提问重新流式生成
  */
 export async function regenerateMessage(
   id: string,
@@ -554,30 +559,77 @@ export async function regenerateMessage(
 ): Promise<void> {
   /** 当前会话详情 */
   const conversation = requireDetail(id)
-  /** 待重试的助手消息 */
+  /** 待重试的原助手消息，只用于定位原提问，不再改写 */
   const answer = conversation.messages.find((message) => message.id === answerId)
   if (!answer || answer.role !== 'agent') {
     throw new Error(`Agent message ${answerId} not found`)
   }
+  /** 原助手消息在列表中的位置，新回答插到它后面一位 */
+  const answerIndex = conversation.messages.indexOf(answer)
 
   /** 原始用户提问 */
-  const promptMessage = conversation.messages.find(
+  let promptMessage = conversation.messages.find(
     (message) => message.id === answer.replyToMessageId,
   )
+  if (!promptMessage) {
+    // 旧 mock 的助手消息没有 replyToMessageId，向前查找最近一条用户提问兜底
+    for (let index = answerIndex - 1; index >= 0; index -= 1) {
+      /** 倒序遇到的当前消息，命中用户提问即作为原始提问 */
+      const message = conversation.messages[index]
+      if (message?.role === 'user') {
+        promptMessage = message
+        break
+      }
+    }
+  }
   /** 原始提问文本，找不到时回退到会话标题 */
   const prompt = promptMessage?.content ?? conversation.summary.title
+  /** 新回答归属的用户提问 id，旧数据缺失时补成兜底找到的提问 */
+  const replyToMessageId = answer.replyToMessageId ?? promptMessage?.id
 
-  answer.content = ''
-  answer.status = 'streaming'
-  answer.error = undefined
-  answer.citations = []
-  answer.toolCalls = []
-  answer.startedAt = toLocalIsoString(new Date())
+  /** 新回答插入位置，默认紧跟当前回答 */
+  let insertIndex = answerIndex + 1
+  // 新回答要追加到同一提问的组尾，旧数据用上面兜底得到的提问 id 归组
+  if (replyToMessageId) {
+    for (let index = conversation.messages.length - 1; index >= 0; index -= 1) {
+      /** 倒序检查当前消息，找到同组最后一版后把新回答追加到组尾 */
+      const message = conversation.messages[index]
+      if (message?.role === 'agent') {
+        /** 当前助手消息归属的提问 id，旧数据按兜底提问补全 */
+        const messageReplyToId = message.replyToMessageId ?? promptMessage?.id
+        if (messageReplyToId !== replyToMessageId) {
+          continue
+        }
+        insertIndex = index + 1
+        break
+      }
+    }
+  }
+
+  /** 新一轮回答的创建时间 */
+  const now = new Date()
+  /** 新回答 id，附加随机后缀避免同一毫秒内重复点重试时撞 id */
+  const nextAnswerId = `${id}-agent-${now.getTime()}-${window.crypto.randomUUID().slice(0, 8)}`
+  /** 新增的 pending 回答，原回答字段保持原样 */
+  const nextAnswer: AgentMessage = {
+    id: nextAnswerId,
+    conversationId: id,
+    role: 'agent',
+    content: '',
+    status: 'pending',
+    createdAt: toLocalIsoString(now),
+    startedAt: toLocalIsoString(now),
+    replyToMessageId,
+    citations: [],
+    toolCalls: [],
+  }
+
+  conversation.messages.splice(insertIndex, 0, nextAnswer)
   touchConversation(conversation, 'processing')
   notifyConversationUpdate(conversation, handlers)
 
-  // 重试与首次发送共用同一套流式流程，只是消息位置不同
-  await runAnswerStream(conversation, answer, prompt, handlers)
+  // 重试与首次发送共用同一套流式流程，新回答插在原回答之后
+  await runAnswerStream(conversation, nextAnswer, prompt, handlers)
 }
 
 /** 创建新会话时返回的摘要与完整详情 */

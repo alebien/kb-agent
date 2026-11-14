@@ -8,13 +8,22 @@ const props = withDefaults(
   defineProps<{
     /** 会话中的一条消息，可能是用户提问、助手回答或其他角色 */
     message: Message
-    /** 是否为会话最后一条消息，只有最后一条助手消息允许重新生成 */
+    /** 是否为会话最后一组助手回答，只有该组允许重新生成 */
     canRetry?: boolean
+    /** 当前助手回答在版本组中的序号，从 1 开始 */
+    versionIndex?: number
+    /** 当前助手回答所属版本组的总版数 */
+    versionCount?: number
+    /** 当前助手回答是否为版本组内最新版，旧版隐藏兜底与转人工提示 */
+    isLatestVersion?: boolean
     /** 本轮转人工产生的工单号 */
     ticketCode?: string
   }>(),
   {
     canRetry: false,
+    versionIndex: 1,
+    versionCount: 1,
+    isLatestVersion: true,
     ticketCode: '',
   },
 )
@@ -27,6 +36,8 @@ const emit = defineEmits<{
   stop: [message: AgentMessage]
   /** 请求删除指定消息 */
   delete: [message: UserMessage | AgentMessage]
+  /** 请求切换助手回答版本，-1 为上一版，1 为下一版 */
+  'change-version': [direction: number]
 }>()
 </script>
 
@@ -40,9 +51,13 @@ const emit = defineEmits<{
     v-else-if="props.message.role === 'agent'"
     :message="props.message"
     :can-retry="props.canRetry"
+    :version-index="props.versionIndex"
+    :version-count="props.versionCount"
+    :is-latest-version="props.isLatestVersion"
     :ticket-code="props.ticketCode"
     @retry="emit('retry', $event)"
     @stop="emit('stop', $event)"
     @delete="emit('delete', $event)"
+    @change-version="emit('change-version', $event)"
   />
 </template>
