@@ -279,7 +279,7 @@ function notifyConversationUpdate(conversation: Conversation, handlers: AnswerSt
 }
 
 /** 流式接口地址，开发环境由 dev/mock-sse-server.ts 提供，接真实后端时改这里 */
-const STREAM_URL = '/api/dev/sse/chat'
+const STREAM_URL = '/api/chat'
 
 /** 服务端推送的事件负载，字段与 dev/mock-sse-server.ts 保持一致 */
 interface StreamPayload {
