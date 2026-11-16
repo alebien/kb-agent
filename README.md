@@ -1,6 +1,6 @@
 # KnoAgent 客服 Agent
 
-客服工作台里的 AI 助手，按《KnoAgent 客服 Agent · 产品需求文档（PRD · 精简版 MVP）v2.0》实现，页面状态同步记录见 PRD v2.0.1。
+客服工作台里的 AI 助手，按《KnoAgent 客服 Agent · 产品需求文档（PRD · 精简版 MVP）v2.0》实现，页面状态同步记录见 PRD v2.0.2。
 
 对外只做一个 Agent：登录、管理自己的会话、提问、查看引用、查订单与转人工建单。文档库、评测中心、工单后台与多角色权限属于 MVP 外能力，代码按 PRD 保留、导航入口隐藏，不参与本期验收。
 
@@ -203,6 +203,14 @@ curl -N -X POST http://localhost:5173/api/dev/sse/chat \
 - `?chunkSize=20`：每帧字符数（默认 6），改它只变颗粒度、不变总耗时，可对比「细腻打字机」与「整段蹦出」两种体感
 
 注意：SSE 端点只在 `pnpm dev` 下存在，`pnpm preview` 静态预览时发送消息会走失败分支。
+
+## 与后端仓库的关系
+
+后端是独立仓库 `kb-agent-api`，与前端目录同级（`project/kb-agent-api`），不放本仓库内：
+
+- 前端只认 HTTP 端口，不认目录：`vite.config.ts` 里把 `/api/chat` 代理到 `http://127.0.0.1:8000`，后端换目录、换机器都不影响前端
+- 联调时要开两个终端：本仓库 `pnpm dev`（5173），后端仓库起 `uvicorn`（8000）
+- 两个仓库各自 `git`、各自 `requirements.txt` / `package.json`，联调通过后各自打 tag（如 `v0.1.0-d7`）以便回溯配对版本
 
 ## 开发命令
 
