@@ -33,6 +33,13 @@ const citationCount = computed(
   () => new Set(props.message.citations.map((citation) => citation.id)).size,
 )
 
+/** 检索耗时文案，缺失显示破折号；0 是合法值，不能用真值判断 */
+const retrievalText = computed(() =>
+  typeof props.message.breakdown?.retrievalMs === 'number'
+    ? formatDuration(props.message.breakdown.retrievalMs)
+    : '—',
+)
+
 /** 总耗时：优先取消息耗时，缺失时用工具耗时求和兜底 */
 const totalDuration = computed(() => {
   if (typeof props.message.durationMs === 'number') {
@@ -84,6 +91,8 @@ const visibleSteps = computed(() =>
       :aria-expanded="isExpanded"
       @click="isExpanded = !isExpanded"
     >
+      <span>检索 {{ retrievalText }}</span>
+      <span class="quality-row__dot">·</span>
       <span>总耗时 {{ formatDuration(totalDuration) }}</span>
       <span class="quality-row__dot">·</span>
       <span>引用 {{ citationCount }} 条</span>

@@ -55,6 +55,8 @@ export interface AgentMessage extends MessageBase {
   startedAt?: string
   /** 本轮回答完成时间，ISO 8601 字符串；流式过程中为空 */
   completedAt?: string
+  /** done 事件的分段耗时，目前只有检索一段，老数据没有该字段 */
+  breakdown?: { retrievalMs: number }
 }
 
 /** 系统消息 */

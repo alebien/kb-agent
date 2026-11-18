@@ -295,6 +295,8 @@ interface StreamPayload {
   tokens?: number
   /** error 事件的错误说明 */
   message?: string
+  /** done 事件的分段耗时，目前只有检索一段，老数据没有该字段 */
+  breakdown?: { retrievalMs: number }
 }
 
 /** 按 id 覆盖写入列表项，工具调用会先推 running 再推 success */
@@ -386,6 +388,7 @@ async function runAnswerStream(
               answer.confidence = payload.confidence
               answer.model = payload.model
               answer.durationMs = payload.durationMs ?? Date.now() - startedAt
+              answer.breakdown = payload.breakdown
               conversation.confidence = payload.confidence ?? null
               conversation.stats.duration += answer.durationMs
               conversation.stats.tokens += payload.tokens ?? 0
