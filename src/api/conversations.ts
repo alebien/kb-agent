@@ -297,6 +297,8 @@ interface StreamPayload {
   message?: string
   /** done 事件的分段耗时，目前只有检索一段，老数据没有该字段 */
   breakdown?: { retrievalMs: number }
+  /** 意图置信度 用意图做闸门，区分碰巧满足关键词和有意提问，决定是否调用工具 */
+  intentConfidence?: number
 }
 
 /** 按 id 覆盖写入列表项，工具调用会先推 running 再推 success */
@@ -390,6 +392,7 @@ async function runAnswerStream(
               answer.durationMs = payload.durationMs ?? Date.now() - startedAt
               answer.breakdown = payload.breakdown
               conversation.confidence = payload.confidence ?? null
+              conversation.intentConfidence = payload.intentConfidence
               conversation.stats.duration += answer.durationMs
               conversation.stats.tokens += payload.tokens ?? 0
               receivedDone = true
