@@ -1,4 +1,4 @@
-import { computed, ref, watch } from 'vue'
+﻿import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -9,6 +9,7 @@ import {
   sendMessage,
   stopMessage,
 } from '@/api/conversations'
+import type { ConversationStreamMeta } from '@/api/conversations'
 import type { AgentMessage, Conversation, UserMessage } from '@/domain'
 import { useAuthStore } from '@/stores/auth'
 import { useConversationStore } from '@/stores/conversations'
@@ -213,13 +214,27 @@ export function useChatSession() {
     target.content += chunk
   }
 
-  /** 把接口返回的最新消息快照写回页面，触发响应式渲染 */
-  function syncMessages(messages: Conversation['messages'], conversationId?: string) {
+  /**
+   * 把接口返回的最新消息快照与会话级字段写回页面，触发响应式渲染
+   *
+   * @param messages 最新消息列表
+   * @param meta 会话级字段，工单号、置信度都靠它落地，缺了「已转人工」就永远不显示
+   * @param conversationId 事件所属会话 id，切换会话后旧流的数据不能写进新会话
+   */
+  function syncMessages(
+    messages: Conversation['messages'],
+    meta: ConversationStreamMeta,
+    conversationId?: string,
+  ) {
     if (
       currentDetail.value &&
       (!conversationId || currentDetail.value.summary.id === conversationId)
     ) {
       currentDetail.value.messages = messages
+      // 工单号由后端建单后回写，低置信度的「已转人工，工单 A0001」靠这一行才有内容
+      currentDetail.value.ticketCode = meta.ticketCode
+      currentDetail.value.confidence = meta.confidence
+      currentDetail.value.intentConfidence = meta.intentConfidence
     }
   }
 
@@ -246,7 +261,7 @@ export function useChatSession() {
             activeAnswerId.value = answerId
           },
           onChunk: appendStreamChunk,
-          onUpdate: (messages) => syncMessages(messages, conversation.summary.id),
+          onUpdate: (messages, meta) => syncMessages(messages, meta, conversation.summary.id),
           onDone: () => {
             isStreaming.value = false
             activeAnswerId.value = ''
@@ -363,7 +378,7 @@ export function useChatSession() {
           activeAnswerId.value = answerId
         },
         onChunk: appendStreamChunk,
-        onUpdate: (messages) => syncMessages(messages, conversation.summary.id),
+        onUpdate: (messages, meta) => syncMessages(messages, meta, conversation.summary.id),
         onDone: () => {
           isStreaming.value = false
           activeAnswerId.value = ''

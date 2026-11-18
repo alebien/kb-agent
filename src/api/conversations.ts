@@ -223,13 +223,32 @@ export async function fetchConversationDetail(id: string): Promise<Conversation>
 }
 
 /** 流式回答的进度回调参数 */
+/**
+ * 流式期间会发生变化的会话级字段
+ *
+ * 消息之外还有工单号与置信度，只同步 messages 的话页面拿不到「已转人工」要用的工单号
+ */
+export interface ConversationStreamMeta {
+  /** 关联工单号，后端建单后才有 */
+  ticketCode: string | null
+  /** 会话层置信度，取最近一条助手回答的值 */
+  confidence: number | null
+  /** 意图置信度，0-1 小数 */
+  intentConfidence?: number
+}
+
 export interface AnswerStreamHandlers {
   /** 流式开始，返回本次助手消息 id */
   onStart?: (answerId: string) => void
   /** 收到一个增量文本片段 */
   onChunk: (chunk: string) => void
-  /** 消息快照更新，用于把 mock 缓存中的最新消息同步到页面响应式状态 */
-  onUpdate?: (messages: Message[]) => void
+  /**
+   * 消息快照更新，用于把 mock 缓存中的最新消息同步到页面响应式状态
+   *
+   * @param messages 最新消息列表
+   * @param meta 会话级字段，工单号与置信度都在这里，页面副本要跟着更新
+   */
+  onUpdate?: (messages: Message[], meta: ConversationStreamMeta) => void
   /** 流式正常结束 */
   onDone: (message: AgentMessage) => void
   /** 流式被用户停止 */
@@ -275,7 +294,11 @@ function cloneConversation(conversation: Conversation): Conversation {
 
 /** 把 mock 缓存中的最新消息、状态与摘要同步给页面 */
 function notifyConversationUpdate(conversation: Conversation, handlers: AnswerStreamHandlers) {
-  handlers.onUpdate?.(snapshotMessages(conversation.messages))
+  handlers.onUpdate?.(snapshotMessages(conversation.messages), {
+    ticketCode: conversation.ticketCode,
+    confidence: conversation.confidence,
+    intentConfidence: conversation.intentConfidence,
+  })
 }
 
 /** 流式接口地址，开发环境由 dev/mock-sse-server.ts 提供，接真实后端时改这里 */
