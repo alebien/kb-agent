@@ -58,6 +58,7 @@ const chunkText = computed(() =>
     size="min(420px, 92vw)"
     class="citation-drawer"
     :destroy-on-close="true"
+    append-to-body
   >
     <div v-if="citation" class="citation-detail">
       <h3 class="citation-detail__title">{{ citation.name }}</h3>

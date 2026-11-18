@@ -385,6 +385,8 @@ function updateScrollState() {
     return
   }
 
+  // 只看 scrollTop 自身的位移方向：内容变高会让「距底距离」变大，但那不是用户意图
+  // 弹层开合引起的布局抖动同理，不能据此关闭跟随
   // 自己触发的滚动不代表用户意图，只同步位置，不改变跟随状态
   if (isProgrammaticScroll) {
     isProgrammaticScroll = false
@@ -397,16 +399,18 @@ function updateScrollState() {
 
   /** 距离底部剩余的滚动距离 */
   const distance = wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight
-  /** 本次滚动是否在向上移动，用户一滚就停跟随，避免被流式内容拽回底部 */
-  const scrollingUp = wrap.scrollTop < lastScrollTop
+  /** 本次滚动的位移，负数代表向上移动，0 代表只有内容变高、位置没动 */
+  const scrollDelta = wrap.scrollTop - lastScrollTop
   lastScrollTop = wrap.scrollTop
 
-  if (scrollingUp && distance > FOLLOW_THRESHOLD) {
+  if (scrollDelta < 0 && distance > FOLLOW_THRESHOLD) {
+    // 用户主动上滚：立刻停跟随，流式内容不许把人拽回底部
     isFollowing.value = false
-  } else {
-    // 只有回到底部附近才恢复跟随，向上停在半路时保持暂停
+  } else if (scrollDelta > 0) {
+    // 用户往下滚：只有回到接近底部才恢复跟随
     isFollowing.value = distance <= FOLLOW_THRESHOLD
   }
+  // scrollDelta 为 0 说明只是内容变高，保持原状态，交给父级贴底帧处理
 
   // 用户接管滚动后立刻取消尚未执行的跟随帧
   if (!isFollowing.value && scrollFrame) {

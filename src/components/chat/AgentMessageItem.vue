@@ -228,7 +228,8 @@ watch(
         </div>
       </section>
 
-      <section v-if="message.citations.length" class="agent-message__section">
+      <!-- 引用来源排在正文之后，流式期间展开会把正文顶出视口，生成完成后再显示 -->
+      <section v-if="message.citations.length && !isGenerating" class="agent-message__section">
         <h4 class="agent-message__section-title">
           <span>引用来源</span>
           <span class="agent-message__section-count">{{ message.citations.length }}</span>
