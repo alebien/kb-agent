@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { citationConfidenceLevel } from '@/domain'
 import type { Citation } from '@/domain'
 import { documents, knowledgeBases } from '@/mock'
 import { formatDate } from '@/utils/datetime'
@@ -49,6 +50,9 @@ const importedAt = computed(() => (document.value ? formatDate(document.value.up
 const chunkText = computed(() =>
   typeof document.value?.chunkCount === 'number' ? `${document.value.chunkCount} 个文本块` : '—',
 )
+
+/** 相关度档位，口径与引用卡片一致，缺失时整行不展示 */
+const confidenceLevel = computed(() => citationConfidenceLevel(props.citation?.confidence))
 </script>
 
 <template>
@@ -80,9 +84,9 @@ const chunkText = computed(() =>
           <dt>页码</dt>
           <dd>第 {{ citation.page }} 页</dd>
         </div>
-        <div v-if="typeof citation.score === 'number'">
-          <dt>相似度</dt>
-          <dd>{{ Math.round(citation.score * 100) }}%</dd>
+        <div v-if="confidenceLevel">
+          <dt>相关度</dt>
+          <dd>{{ confidenceLevel.text }}</dd>
         </div>
       </dl>
 

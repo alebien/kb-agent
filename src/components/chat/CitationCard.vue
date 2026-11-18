@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { citationConfidenceLevel } from '@/domain'
 import type { Citation } from '@/domain'
 
 /** 单条引用卡片 */
@@ -17,20 +18,8 @@ const emit = defineEmits<{
 /** 是否可点击：有文档 id 且来源未下线 */
 const isClickable = computed(() => !!props.citation.documentId && !props.citation.unavailable)
 
-/** 相似度百分比，缺失时不展示 */
-// const scoreText = computed(() =>
-//   typeof props.citation.score === 'number' ? `${Math.round(props.citation.score * 100)}%` : '',
-// )
-
-/** 可信度档位：按贴题程度分三档，不显示原始小数 */
-const confidenceLevel = computed(() => {
-  // 缺失时不渲染，老数据与 mock 场景都会走到这里
-  const value = props.citation.confidence
-  if (typeof value !== 'number') return null
-  if (value >= 0.8) return { key: 'high', text: '相关度高' }
-  if (value >= 0.6) return { key: 'medium', text: '相关度中' }
-  return { key: 'low', text: '相关度低' }
-})
+/** 相关度档位，缺失时不展示，老数据与 mock 场景都会走到 null */
+const confidenceLevel = computed(() => citationConfidenceLevel(props.citation.confidence))
 
 /** 片段超过 120 字时截断，避免卡片撑高 */
 const snippetText = computed(() => {
@@ -41,15 +30,19 @@ const snippetText = computed(() => {
 </script>
 
 <template>
-  <component :is="isClickable ? 'button' : 'div'" class="citation-card"
+  <component
+    :is="isClickable ? 'button' : 'div'"
+    class="citation-card"
     :class="{ 'is-clickable': isClickable, 'is-offline': citation.unavailable }"
-    :type="isClickable ? 'button' : undefined" :aria-label="isClickable ? `查看来源：${citation.name}` : undefined"
-    @click="isClickable && emit('open', citation)">
+    :type="isClickable ? 'button' : undefined"
+    :aria-label="isClickable ? `查看来源：${citation.name}` : undefined"
+    @click="isClickable && emit('open', citation)"
+  >
     <div class="citation-card__head">
       <strong class="citation-card__name">{{ citation.name }}</strong>
-      <!-- <span v-if="confidenceLevel" class="citation-card__score">{{ confidenceLevel }}</span> -->
-      <span v-if="confidenceLevel" :class="['citation-card__confidence', confidenceLevel.key]">{{ confidenceLevel.text
-        }}</span>
+      <span v-if="confidenceLevel" :class="['citation-card__confidence', confidenceLevel.key]">
+        {{ confidenceLevel.text }}
+      </span>
     </div>
 
     <p v-if="citation.description" class="citation-card__desc">{{ citation.description }}</p>

@@ -25,3 +25,36 @@ export interface Citation {
    */
   confidence?: number
 }
+
+/** 引用相关度的展示档位 */
+export interface CitationConfidenceLevel {
+  /** 档位标识，用于拼接样式类名 */
+  key: 'high' | 'medium' | 'low'
+  /** 档位文案，直接上屏，不展示原始小数 */
+  text: string
+}
+
+/**
+ * 把 0 至 1 的相关度换算成三档文案
+ *
+ * 阈值与后端 confidence 的量纲绑定：多词查询上限 0.95，单词查询封顶 0.7，
+ * 所以 0.8 以上只会出现在多词命中，0.6 以下属于明显偏弱
+ *
+ * @param confidence 后端给出的相关度，缺失时为 undefined
+ * @returns 档位对象；缺失或非有限数时返回 null，调用方据此整段隐藏
+ */
+export function citationConfidenceLevel(confidence?: number): CitationConfidenceLevel | null {
+  if (typeof confidence !== 'number' || !Number.isFinite(confidence)) {
+    return null
+  }
+
+  if (confidence >= 0.8) {
+    return { key: 'high', text: '相关度高' }
+  }
+
+  if (confidence >= 0.6) {
+    return { key: 'medium', text: '相关度中' }
+  }
+
+  return { key: 'low', text: '相关度低' }
+}
