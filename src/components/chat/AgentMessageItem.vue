@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import MarkdownRenderer from '@/components/common/MarkdownRenderer.vue'
 import CitationCard from './CitationCard.vue'
@@ -54,8 +54,20 @@ const emit = defineEmits<{
 
 /** 长消息折叠阈值，超过后默认只展示前 900 字，降低长 Markdown 渲染压力 */
 const COLLAPSE_THRESHOLD = 900
-/** 是否手动展开长消息 */
-const isExpanded = ref(false)
+/** 已手动展开过的消息 id，切走再切回仍保持展开，不重新折回去 */
+const expandedIds = ref(new Set<string>())
+/** 当前消息是否已展开；写入时整体替换 Set，确保触发响应式更新 */
+const isExpanded = computed({
+  get: () => expandedIds.value.has(props.message.id),
+  set: (value: boolean) => {
+    const next = new Set(expandedIds.value)
+    if (value) next.add(props.message.id)
+    else next.delete(props.message.id)
+    expandedIds.value = next
+  },
+})
+/** 展开按钮元素，切换时用它取前后位置，锁住滚动锚点 */
+const expandButtonRef = ref<HTMLButtonElement | null>(null)
 /** 当前消息是否已开始流式生成 */
 const isStreaming = computed(() => props.message.status === 'streaming')
 /** 当前消息是否处于等待首个增量或正在流式生成，两者都展示生成中的交互态 */
@@ -82,9 +94,9 @@ const displayContent = computed(() => {
 /** 是否展示展开按钮 */
 const showExpandButton = computed(() => props.message.content.length > COLLAPSE_THRESHOLD)
 
-/** 折叠态提示文案，仅在生成结束后展示 */
-const showCollapsedHint = computed(
-  () => showExpandButton.value && !isExpanded.value && !isGenerating.value,
+/** 折叠时被藏起的字数，用于按钮文案「展开全文（还剩 N 字）」 */
+const collapsedRemaining = computed(() =>
+  Math.max(0, props.message.content.length - displayContent.value.length),
 )
 
 /** 是否展示工具调用区 */
@@ -154,9 +166,21 @@ function openCitation(citation: Citation) {
   citationVisible.value = true
 }
 
-/** 切换长消息展开状态 */
+/**
+ * 切换长消息展开状态，并补偿滚动位置
+ *
+ * 正文在按钮上方很远处收缩，不做补偿会导致页面猛跳、读者丢失当前行，
+ * 所以记录按钮切换前后在视口中的位置差，用 scrollBy 抵掉
+ */
 function toggleExpand() {
+  const anchorTop = expandButtonRef.value?.getBoundingClientRect().top ?? 0
   isExpanded.value = !isExpanded.value
+  void nextTick(() => {
+    const nextTop = expandButtonRef.value?.getBoundingClientRect().top
+    // 收起后按钮若被重建取不到位置，放弃补偿，避免瞎滚
+    if (typeof nextTop !== 'number') return
+    window.scrollBy(0, nextTop - anchorTop)
+  })
 }
 
 /** 建单确认：当前只做页面反馈，接口逻辑待接入 */
@@ -204,14 +228,6 @@ function handleCopyCommand(command: string | number | object) {
     copyPlainText()
   }
 }
-
-// 每条长消息独立记录展开状态；切换到另一条消息时恢复折叠
-watch(
-  () => props.message.id,
-  () => {
-    isExpanded.value = false
-  },
-)
 </script>
 
 <template>
@@ -247,6 +263,21 @@ watch(
         <span class="agent-message__typing-dot" />
       </div>
       <MarkdownRenderer v-else :content="displayContent" :streaming="isStreaming" />
+
+      <!-- 折叠开关贴在正文底部，读者读到断句处就能看见，不用翻到操作栏去找 -->
+      <div v-if="showExpandButton && !isGenerating" class="agent-message__collapse">
+        <div v-if="!isExpanded" class="agent-message__collapse-fade" aria-hidden="true" />
+        <button
+          ref="expandButtonRef"
+          type="button"
+          class="agent-message__collapse-button"
+          :aria-expanded="isExpanded"
+          @click="toggleExpand"
+        >
+          <span>{{ isExpanded ? '收起' : `展开全文（还剩 ${collapsedRemaining} 字）` }}</span>
+          <MessageActionIcon :name="isExpanded ? 'collapse' : 'expand'" />
+        </button>
+      </div>
 
       <section v-if="hasToolCalls" class="agent-message__section">
         <h4 class="agent-message__section-title">
@@ -322,16 +353,7 @@ watch(
             icon="retry"
             @click="emit('retry', message)"
           />
-          <MessageActionButton
-            v-if="showExpandButton"
-            :label="isExpanded ? '收起' : '展开全文'"
-            :icon="isExpanded ? 'collapse' : 'expand'"
-            :active="isExpanded"
-            @click="toggleExpand"
-          />
           <MessageActionButton label="删除" icon="delete" danger @click="emit('delete', message)" />
-
-          <span v-if="showCollapsedHint" class="message-actions__hint">内容较长，已折叠</span>
         </template>
 
         <div v-if="showVersionPager" class="message-version-pager" aria-label="回答版本切换">
@@ -441,6 +463,46 @@ watch(
 
 .agent-message__section {
   margin-top: 16px;
+}
+
+/* 折叠区：渐隐遮罩压在正文末尾，按钮紧随其后占满整行，扩大命中区 */
+.agent-message__collapse {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-top: 4px;
+}
+
+.agent-message__collapse-fade {
+  width: 100%;
+  height: 32px;
+  margin-top: -32px;
+  background: linear-gradient(to bottom, transparent, var(--el-bg-color));
+  pointer-events: none;
+}
+
+.agent-message__collapse-button {
+  display: inline-flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 8px;
+  color: var(--el-color-primary);
+  font-size: 12px;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.agent-message__collapse-button:hover {
+  background: var(--el-fill-color-light);
+}
+
+.agent-message__collapse-button:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
 }
 
 .agent-message__section-title {

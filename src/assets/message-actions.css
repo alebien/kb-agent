@@ -60,14 +60,6 @@
   outline-offset: 1px;
 }
 
-/* 操作栏右侧的补充说明，例如「内容较长，已折叠」 */
-.message-actions__hint {
-  margin-left: 4px;
-  color: var(--el-text-color-placeholder);
-  font-size: 12px;
-  line-height: 1;
-}
-
 /* 触屏设备没有悬停态，操作栏保持常驻 */
 @media (hover: none) {
   .message-actions {
