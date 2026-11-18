@@ -18,4 +18,10 @@ export interface Citation {
   score?: number
   /** 来源是否已下线，下线时卡片置灰且不可点击 */
   unavailable?: boolean
+  /**
+   * 检索命中的贴题程度，0 至 1，按 IDF 加权，仅用于展示分档
+   * 与 score 的分工：score 是相对最高分的排序值，confidence 是这块内容本身有多贴题
+   * 老数据与 mock 场景可能缺失，缺失时卡片不显示相关度角标
+   */
+  confidence?: number
 }
