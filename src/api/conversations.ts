@@ -314,6 +314,22 @@ function upsertById<T extends { id: string }>(list: T[], item: T): void {
 }
 
 /**
+ * 从建单工具的结果里取工单号
+ *
+ * 后端约定的 result 为 `{ ticketNo, status, reused }`，结构不对就当没建出来，
+ * 让转人工提示退化成「没有工单号」而不是显示一个 undefined
+ */
+function readTicketNo(result: unknown): string | null {
+  if (typeof result !== 'object' || result === null || !('ticketNo' in result)) {
+    return null
+  }
+
+  /** 后端返回的工单号，形如 A0001 */
+  const ticketNo = (result as { ticketNo?: unknown }).ticketNo
+  return typeof ticketNo === 'string' && ticketNo ? ticketNo : null
+}
+
+/**
  * 把一次真实的 SSE 回答写进会话
  *
  * sendMessage 与 regenerateMessage 共用这段流程，区别只在调用前如何准备消息
@@ -346,7 +362,12 @@ async function runAnswerStream(
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, answerId: answer.id }),
+        body: JSON.stringify({
+          prompt,
+          answerId: answer.id,
+          // 会话 id 取自摘要，后端按「会话 + 提问」判重工单
+          conversationId: conversation.summary.id,
+        }),
       },
       {
         onRawEvent: (raw) => {
@@ -375,7 +396,17 @@ async function runAnswerStream(
               break
             }
             case 'tool': {
-              upsertById(answer.toolCalls, readEventData<ToolCall>(event))
+              /** 本次工具事件，running 与 success 靠同 id 合并成同一张卡片 */
+              const toolCall = readEventData<ToolCall>(event)
+              upsertById(answer.toolCalls, toolCall)
+              // 建单成功才回写工单号，低置信度的「已转人工」提示靠它显示
+              if (toolCall.name === 'create_ticket' && toolCall.status === 'success') {
+                /** 后端建的工单号，取不到时保留原值 */
+                const ticketNo = readTicketNo(toolCall.result)
+                if (ticketNo) {
+                  conversation.ticketCode = ticketNo
+                }
+              }
               // 工具调用状态从 running 变为 success 时同样需要立即刷新
               notifyConversationUpdate(conversation, handlers)
               break

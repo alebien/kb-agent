@@ -95,13 +95,18 @@ const showConfidence = computed(
   () => !isGenerating.value && typeof props.message.confidence === 'number',
 )
 
-/** 无引用兜底：已产出结果、置信度存在且没有任何引用 */
+/**
+ * 无引用兜底：已产出结果、置信度存在且没有任何引用
+ *
+ * 后端对零引用会自动建单，建出工单号后由「已转人工」接管，这里就不再重复提示
+ */
 const showFallbackBanner = computed(
   () =>
     props.isLatestVersion &&
     isSettled.value &&
     typeof props.message.confidence === 'number' &&
-    !props.message.citations.length,
+    !props.message.citations.length &&
+    !props.ticketCode,
 )
 
 /** 低置信度转人工提示 */
@@ -112,6 +117,21 @@ const showHandoff = computed(
     typeof props.message.confidence === 'number' &&
     props.message.confidence < 75 &&
     !!props.ticketCode,
+)
+
+/**
+ * 建议人工复核提示
+ *
+ * 置信度落在 75–84 时不自动建单，只提示并给建单入口；
+ * 低于 75 走 showHandoff 的「已转人工」，85 以上什么都不提示
+ */
+const showReviewBanner = computed(
+  () =>
+    props.isLatestVersion &&
+    isSettled.value &&
+    typeof props.message.confidence === 'number' &&
+    props.message.confidence >= 75 &&
+    props.message.confidence < 85,
 )
 
 /** 是否展示版本分页器，只有同组多版时才出现 */
@@ -204,6 +224,16 @@ watch(
         </div>
         <el-button size="small" type="primary" plain @click="ticketVisible = true">
           转人工
+        </el-button>
+      </div>
+
+      <div v-if="showReviewBanner" class="agent-message__fallback">
+        <div class="agent-message__fallback-copy">
+          <strong>这条回答建议人工复核</strong>
+          <span>置信度偏低，对外承诺前先确认口径；需要跟进可以建单</span>
+        </div>
+        <el-button size="small" type="primary" plain @click="ticketVisible = true">
+          建单
         </el-button>
       </div>
 
