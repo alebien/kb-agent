@@ -13,6 +13,39 @@ import { useAuthStore } from '@/stores/auth'
 import { buildSseDebugUrl, recordSseDebugEntry } from '@/dev/sse-debug'
 import { readEventData, streamSse } from './sse'
 
+/**
+ * 生成 UUID 字符串
+ * crypto.randomUUID 只在安全上下文（https、localhost）可用，用 http 直连公网 IP 时是 undefined
+ * 所以这里按三级降级：原生 randomUUID → getRandomValues 拼 v4 → Math.random 兜底
+ */
+function safeRandomUUID(): string {
+  // 安全上下文下直接用原生实现，格式与性能都最好
+  if (typeof window.crypto?.randomUUID === 'function') {
+    return window.crypto.randomUUID()
+  }
+
+  // 非安全上下文的 crypto 仍有 getRandomValues，但不确定值是否真的随机，只能当可用
+  const bytes = new Uint8Array(16)
+  if (typeof window.crypto?.getRandomValues === 'function') {
+    window.crypto.getRandomValues(bytes)
+  } else {
+    // 连 getRandomValues 都没有的极老浏览器，退到 Math.random，仅用于生成不重复 id
+    for (let i = 0; i < bytes.length; i += 1) {
+      bytes[i] = Math.floor(Math.random() * 256)
+    }
+  }
+
+  // 按 RFC 4122 设置版本号 4 与变体位，保证拼出的字符串是合法 UUID v4
+  const byte6 = bytes[6] ?? 0
+  const byte8 = bytes[8] ?? 0
+  bytes[6] = (byte6 & 0x0f) | 0x40
+  bytes[8] = (byte8 & 0x3f) | 0x80
+
+  // 转成 32 位十六进制后按 8-4-4-4-12 分段
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
 /** 会话不存在或不属于当前登录人时抛出的错误码，前端统一映射为同一句提示 */
 export const CONVERSATION_FORBIDDEN_CODE = 'FORBIDDEN_CONVERSATION'
 
@@ -669,7 +702,7 @@ export async function regenerateMessage(
   /** 新一轮回答的创建时间 */
   const now = new Date()
   /** 新回答 id，附加随机后缀避免同一毫秒内重复点重试时撞 id */
-  const nextAnswerId = `${id}-agent-${now.getTime()}-${window.crypto.randomUUID().slice(0, 8)}`
+  const nextAnswerId = `${id}-agent-${now.getTime()}-${safeRandomUUID().slice(0, 8)}`
   /** 新增的 pending 回答，原回答字段保持原样 */
   const nextAnswer: AgentMessage = {
     id: nextAnswerId,
@@ -709,7 +742,7 @@ export async function createConversation(initialMessage?: string): Promise<Creat
   }
 
   /** 浏览器生成的会话唯一标识 */
-  const uuid = window.crypto.randomUUID()
+  const uuid = safeRandomUUID()
   /** 去除首尾空白后的首条提问 */
   const prompt = initialMessage?.trim() ?? ''
   /** 用于生成标题的单行文本 */
