@@ -25,7 +25,12 @@ const visible = computed({
   set: (value: boolean) => emit('update:modelValue', value),
 })
 
-/** 引用对应的文档实体，找不到说明来源已删除或数据缺失 */
+/**
+ * 引用对应的文档实体，只用于补充导入时间与文本块数
+ *
+ * 数据源是前端 mock 文档库，后端新入库的文档不在其中，查不到属正常情况，
+ * 不能据此判定来源已下线——下线判据只有 citation.unavailable 一个
+ */
 const document = computed(() =>
   props.citation?.documentId
     ? (documents.find((item) => item.id === props.citation?.documentId) ?? null)
@@ -101,7 +106,11 @@ const detailLabel = computed(() => (props.citation?.content ? '原文' : '命中
         <blockquote>{{ detailText }}</blockquote>
       </div>
 
-      <el-empty v-if="!document" description="文档已删除或无权访问" :image-size="80" />
+      <el-empty
+        v-if="citation.unavailable"
+        description="文档已删除或无权访问"
+        :image-size="80"
+      />
     </div>
 
     <el-empty v-else description="暂无引用来源" :image-size="80" />
