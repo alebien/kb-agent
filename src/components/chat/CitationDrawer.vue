@@ -48,13 +48,29 @@ const knowledgeName = computed(() => {
   return knowledgeBases.find((item) => item.id === knowledgeBaseId)?.name ?? '未知知识库'
 })
 
-/** 导入时间，文档缺失时显示占位 */
-const importedAt = computed(() => (document.value ? formatDate(document.value.uploadedAt) : '—'))
+/**
+ * 导入时间：优先取后端随引用带回来的值，其次查前端 mock 文档库，都没有显示破折号
+ *
+ * 新入库的后端文档不在 mock 里，只靠 mock 会空着，所以后端有值就以它为准
+ */
+const importedAt = computed(() => {
+  if (props.citation?.uploadedAt) {
+    return formatDate(props.citation.uploadedAt)
+  }
 
-/** 文本块数量，未知时显示占位 */
-const chunkText = computed(() =>
-  typeof document.value?.chunkCount === 'number' ? `${document.value.chunkCount} 个文本块` : '—',
-)
+  return document.value ? formatDate(document.value.uploadedAt) : '—'
+})
+
+/** 文本块数量：优先用后端统计的真实块数，缺失时退回 mock 数据 */
+const chunkText = computed(() => {
+  if (typeof props.citation?.chunkCount === 'number') {
+    return `${props.citation.chunkCount} 个文本块`
+  }
+
+  return typeof document.value?.chunkCount === 'number'
+    ? `${document.value.chunkCount} 个文本块`
+    : '—'
+})
 
 /** 相关度档位，口径与引用卡片一致，缺失时整行不展示 */
 const confidenceLevel = computed(() => citationConfidenceLevel(props.citation?.confidence))
@@ -106,11 +122,7 @@ const detailLabel = computed(() => (props.citation?.content ? '原文' : '命中
         <blockquote>{{ detailText }}</blockquote>
       </div>
 
-      <el-empty
-        v-if="citation.unavailable"
-        description="文档已删除或无权访问"
-        :image-size="80"
-      />
+      <el-empty v-if="citation.unavailable" description="文档已删除或无权访问" :image-size="80" />
     </div>
 
     <el-empty v-else description="暂无引用来源" :image-size="80" />

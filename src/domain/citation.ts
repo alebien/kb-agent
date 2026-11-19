@@ -17,6 +17,10 @@ export interface Citation {
    * 后端去掉了 Markdown 标记但保留分段；老数据与 mock 缺失时抽屉回退到 snippet
    */
   content?: string
+  /** 该文档在检索索引里的块数，用于详情展示「文本块 N 个」 */
+  chunkCount?: number
+  /** 文档导入时间，ISO 8601 字符串；清单里没有的文档不传 */
+  uploadedAt?: string
   /** 片段在文档中的页码，未知时不传 */
   page?: number
   /** 检索相似度分数，取值 0-1 */
