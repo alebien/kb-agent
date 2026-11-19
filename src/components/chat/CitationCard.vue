@@ -21,11 +21,16 @@ const isClickable = computed(() => !!props.citation.documentId && !props.citatio
 /** 相关度档位，缺失时不展示，老数据与 mock 场景都会走到 null */
 const confidenceLevel = computed(() => citationConfidenceLevel(props.citation.confidence))
 
-/** 片段超过 120 字时截断，避免卡片撑高 */
+/** 卡片上只露这么多字，够看出这块讲什么就行；完整内容在来源详情抽屉里 */
+const SNIPPET_PREVIEW_LEN = 40
+
+/** 片段超过预览长度时截断并补省略号，避免卡片把对话区撑高 */
 const snippetText = computed(() => {
   /** 原始片段 */
   const snippet = props.citation.snippet ?? ''
-  return snippet.length > 120 ? `${snippet.slice(0, 120)}…` : snippet
+  return snippet.length > SNIPPET_PREVIEW_LEN
+    ? `${snippet.slice(0, SNIPPET_PREVIEW_LEN)}…`
+    : snippet
 })
 </script>
 
@@ -135,6 +140,8 @@ const snippetText = computed(() => {
   display: -webkit-box;
   overflow: hidden;
   -webkit-box-orient: vertical;
+  /* -webkit-box 这套要靠带前缀的属性才裁剪，只写标准 line-clamp 在 Chromium 上不生效 */
+  -webkit-line-clamp: 2;
   line-clamp: 2;
 }
 

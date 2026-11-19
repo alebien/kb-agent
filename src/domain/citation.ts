@@ -10,8 +10,13 @@ export interface Citation {
   name: string
   /** 来源补充说明；没有时不传 */
   description?: string
-  /** 命中的原文片段 */
+  /** 命中的原文片段，卡片只显示前几十字 */
   snippet?: string
+  /**
+   * 该文本块的完整原文，供来源详情抽屉展示
+   * 后端去掉了 Markdown 标记但保留分段；老数据与 mock 缺失时抽屉回退到 snippet
+   */
+  content?: string
   /** 片段在文档中的页码，未知时不传 */
   page?: number
   /** 检索相似度分数，取值 0-1 */

@@ -53,6 +53,12 @@ const chunkText = computed(() =>
 
 /** 相关度档位，口径与引用卡片一致，缺失时整行不展示 */
 const confidenceLevel = computed(() => citationConfidenceLevel(props.citation?.confidence))
+
+/** 详情正文：优先用整块原文，老数据没有 content 时退回命中片段 */
+const detailText = computed(() => props.citation?.content || props.citation?.snippet || '')
+
+/** 正文标题随数据来源变化，避免把片段标成原文 */
+const detailLabel = computed(() => (props.citation?.content ? '原文' : '命中片段'))
 </script>
 
 <template>
@@ -90,9 +96,9 @@ const confidenceLevel = computed(() => citationConfidenceLevel(props.citation?.c
         </div>
       </dl>
 
-      <div v-if="citation.snippet" class="citation-detail__snippet">
-        <p class="citation-detail__label">命中片段</p>
-        <blockquote>{{ citation.snippet }}</blockquote>
+      <div v-if="detailText" class="citation-detail__snippet">
+        <p class="citation-detail__label">{{ detailLabel }}</p>
+        <blockquote>{{ detailText }}</blockquote>
       </div>
 
       <el-empty v-if="!document" description="文档已删除或无权访问" :image-size="80" />
@@ -160,5 +166,9 @@ const confidenceLevel = computed(() => citationConfidenceLevel(props.citation?.c
   background: var(--el-color-primary-light-9);
   border-left: 3px solid var(--el-color-primary);
   border-radius: 6px;
+  /* 原文按行存着，保留换行才能看出分段，否则整块会挤成一段 */
+  white-space: pre-wrap;
+  /* 长串英文与订单号不换行会撑破抽屉宽度 */
+  word-break: break-word;
 }
 </style>
