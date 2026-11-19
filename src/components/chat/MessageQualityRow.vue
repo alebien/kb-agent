@@ -81,6 +81,34 @@ const steps = computed(() =>
 const visibleSteps = computed(() =>
   props.message.toolCalls.length ? steps.value : steps.value.slice(0, 1),
 )
+
+/** 是否展示「生成」这一步：它不在 toolCalls 里，只有真实调用过工具的回答才追加 */
+const showGeneration = computed(() => props.message.toolCalls.length > 0)
+
+/**
+ * 「生成」一步的展示数据
+ *
+ * 取自 done 事件的 breakdown.generationMs，是固定第四步；老数据或 mock 没有该字段，
+ * 耗时显示破折号而不是 0ms，避免把「没测量」读成「瞬间生成」
+ */
+const generationStep = computed(() => {
+  /** 生成耗时，单位毫秒，undefined 表示本次没拿到分段数据 */
+  const generationMs = props.message.breakdown?.generationMs
+
+  return {
+    /** 步骤名，固定为「生成」，与工具链路的检索/查订单/建单并列 */
+    label: '生成',
+    /** 右侧说明，用模型名代替工具名，缺失时留空 */
+    name: props.message.model ?? '',
+    /** 耗时文案，缺失显示破折号；0 是合法值，不能用真值判断 */
+    durationText: typeof generationMs === 'number' ? formatDuration(generationMs) : '—',
+    // 生成占比超过一半时同样高亮，模型慢时用户最该看到这一条
+    isHeavy:
+      typeof generationMs === 'number' &&
+      totalDuration.value > 0 &&
+      generationMs / totalDuration.value > 0.5,
+  }
+})
 </script>
 
 <template>
@@ -123,6 +151,20 @@ const visibleSteps = computed(() =>
             {{ step.statusText }}
           </span>
           <span class="quality-step__duration">{{ step.durationText }}</span>
+        </div>
+
+        <div
+          v-if="showGeneration"
+          class="quality-step"
+          :class="{ 'is-heavy': generationStep.isHeavy }"
+        >
+          <span class="quality-step__index">{{ visibleSteps.length + 1 }}</span>
+          <span class="quality-step__label">{{ generationStep.label }}</span>
+          <span v-if="generationStep.name" class="quality-step__name">
+            {{ generationStep.name }}
+          </span>
+          <span v-else class="quality-step__name" />
+          <span class="quality-step__duration">{{ generationStep.durationText }}</span>
         </div>
       </div>
     </Transition>

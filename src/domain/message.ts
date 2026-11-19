@@ -55,8 +55,17 @@ export interface AgentMessage extends MessageBase {
   startedAt?: string
   /** 本轮回答完成时间，ISO 8601 字符串；流式过程中为空 */
   completedAt?: string
-  /** done 事件的分段耗时，目前只有检索一段，老数据没有该字段 */
-  breakdown?: { retrievalMs: number }
+  /** done 事件的分段耗时，四段之和约等于 durationMs；老数据只有 retrievalMs 或整段缺失 */
+  breakdown?: {
+    /** 检索耗时，单位毫秒，恒有值 */
+    retrievalMs: number
+    /** 查订单耗时，未调用该工具时为 0 */
+    orderMs?: number
+    /** 建单耗时，未调用该工具时为 0 */
+    ticketMs?: number
+    /** 模型生成耗时，含首字延迟；老数据没有该字段，展示时显示「—」 */
+    generationMs?: number
+  }
 }
 
 /** 系统消息 */
