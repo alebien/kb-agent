@@ -408,7 +408,7 @@ export function mockSseServer(): Plugin {
             id: toolId,
             name: 'search_knowledge',
             status: 'running',
-            arguments: { query: prompt, top_k: 5 },
+            arguments: { query: prompt, top_k: 3 },
             startAt: new Date().toISOString(),
           })
 
