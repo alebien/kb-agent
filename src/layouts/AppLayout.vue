@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
+import IcpFooter from '@/components/common/IcpFooter.vue'
 import { useAppViewportHeight } from '@/composables/useAppViewportHeight'
 
 /** 当前路由信息，路由变化时关闭移动端抽屉 */
@@ -79,6 +80,8 @@ onBeforeUnmount(() => {
       <el-main class="app-main" :class="{ 'is-chat': isChatPage }">
         <RouterView />
       </el-main>
+
+      <IcpFooter />
     </el-container>
   </el-container>
 </template>
