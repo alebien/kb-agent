@@ -6,7 +6,7 @@
  */
 
 /** ICP 备案号，由阿里云备案控制台下发，格式形如 沪ICP备2026000000号-1 */
-export const ICP_LICENSE_NO = '黑ICP备2026015521号'
+export const ICP_LICENSE_NO = '黑ICP备2026015521号-1'
 
 /** 工信部备案查询地址，法规要求页脚备案号必须链接到这里 */
 export const ICP_LICENSE_URL = 'https://beian.miit.gov.cn/'
